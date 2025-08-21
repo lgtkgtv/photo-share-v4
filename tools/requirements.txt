@@ -1,0 +1,37 @@
+# Security Tools Ecosystem - Base Dependencies
+# Version: 1.0.0
+
+# Core dependencies
+requests>=2.31.0          # HTTP client for API calls
+pydantic>=2.5.0           # Data validation and settings
+click>=8.1.0              # CLI framework
+rich>=13.7.0              # Rich text and beautiful formatting
+jinja2>=3.1.6             # Template engine (security patched)
+pyyaml>=6.0.1             # YAML parsing
+python-dateutil>=2.8.2    # Date utilities
+
+# Security and vulnerability scanning
+safety>=3.0.0             # Python package vulnerability scanner
+bandit>=1.7.5             # Security linter for Python
+semgrep>=1.45.0           # Static analysis tool
+
+# Standards compliance
+jsonschema>=4.19.0        # JSON schema validation
+packaging>=23.0           # Package version parsing
+toml>=0.10.2              # TOML file parsing
+
+# Reporting and documentation
+markdown>=3.5.0           # Markdown processing
+pygments>=2.17.0          # Syntax highlighting
+weasyprint>=60.0          # PDF generation (optional)
+
+# Development and testing
+pytest>=7.4.0            # Testing framework
+pytest-cov>=4.1.0        # Coverage reporting
+black>=23.0.0             # Code formatting
+isort>=5.12.0             # Import sorting
+mypy>=1.6.0               # Type checking
+
+# Environment management
+python-dotenv>=1.0.0      # Environment variable management
+virtualenv>=20.24.0       # Virtual environment creation

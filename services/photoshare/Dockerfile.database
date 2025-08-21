@@ -1,0 +1,49 @@
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements with database dependencies
+COPY services/photoshare/requirements_fixed.txt requirements.txt
+
+# Install Python dependencies with database support
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY services/photoshare/database.py /app/database.py
+COPY services/photoshare/file_storage.py /app/file_storage.py
+COPY services/photoshare/service_discovery.py /app/service_discovery.py
+COPY services/photoshare/error_handling.py /app/error_handling.py
+COPY services/photoshare/security.py /app/security.py
+COPY services/photoshare/performance_simple.py /app/performance_simple.py
+COPY services/photoshare/monitoring.py /app/monitoring.py
+COPY services/photoshare/main_database.py /app/main.py
+
+# Copy test files and dependencies
+COPY services/photoshare/requirements_test.txt /app/requirements_test.txt
+COPY services/photoshare/pytest.ini /app/pytest.ini
+COPY services/photoshare/run_tests.py /app/run_tests.py
+COPY services/photoshare/tests/ /app/tests/
+
+# Install test dependencies
+RUN pip install --no-cache-dir -r requirements_test.txt
+
+# Create non-root user for security
+RUN useradd --create-home --shell /bin/bash app && chown -R app:app /app
+USER app
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Expose port
+EXPOSE 8000
+
+# Run the application
+CMD ["python", "main.py"]

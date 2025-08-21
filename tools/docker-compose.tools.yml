@@ -1,0 +1,125 @@
+# SBOM Agent Tools - Docker Compose Configuration
+# Version: 2.1.0
+#
+# Usage Examples:
+#   docker-compose -f docker-compose.tools.yml run sbom-agent analyze /workspace
+#   docker-compose -f docker-compose.tools.yml run environment-detector
+#   docker-compose -f docker-compose.tools.yml run quick-sbom
+
+services:
+  # Base tools environment
+  tools-base:
+    build:
+      context: .
+      dockerfile: Dockerfile.tools
+    volumes:
+      - type: bind
+        source: ${WORKSPACE_DIR:-../}
+        target: /workspace
+        read_only: false
+      - type: bind
+        source: ${REPORTS_DIR:-./reports}
+        target: /reports
+        read_only: false
+      - type: volume
+        source: tools-cache
+        target: /tmp/tools-cache
+    environment:
+      - WORKSPACE_DIR=/workspace
+      - REPORTS_DIR=/reports
+      - TOOLS_VERSION=2.1.0
+      - PYTHONPATH=/tools
+    networks:
+      - tools-network
+
+  # SBOM Agent - Multi-language SBOM generation and vulnerability scanning
+  sbom-agent:
+    extends: tools-base
+    working_dir: /tools/sbom-agent
+    entrypoint: ["python", "src/cli.py"]
+    command: ["--help"]
+    environment:
+      - TOOL_NAME=sbom-agent
+      - TOOL_VERSION=2.1.0
+
+  # Environment Detector - Project environment analysis
+  environment-detector:
+    extends: tools-base
+    working_dir: /tools
+    entrypoint: ["python", "shared/environment_detector.py"]
+    command: []
+
+  # Quick SBOM Analysis - Fast scan for CI/CD
+  quick-sbom:
+    extends: tools-base
+    working_dir: /tools/sbom-agent
+    entrypoint: ["python", "src/cli.py"]
+    command: ["quick-scan", "/workspace"]
+
+  # Full Analysis - Comprehensive SBOM and vulnerability scan
+  full-analysis:
+    extends: tools-base
+    working_dir: /tools/sbom-agent
+    entrypoint: ["python", "src/cli.py"]
+    command: ["progressive-analysis", "/workspace", "--auto-remediate", "--output-dir", "/reports"]
+
+volumes:
+  tools-cache:
+    driver: local
+
+networks:
+  tools-network:
+    driver: bridge
+
+# Service-specific configurations for different use cases
+
+# Development environment - mounts local tools for development
+x-development-config: &development-config
+  volumes:
+    - type: bind
+      source: .
+      target: /tools
+      read_only: false
+    - type: bind
+      source: ${WORKSPACE_DIR:-../}
+      target: /workspace
+      read_only: false
+    - type: bind
+      source: ${REPORTS_DIR:-./reports}
+      target: /reports
+      read_only: false
+  environment:
+    - DEVELOPMENT_MODE=true
+    - PYTHONPATH=/tools
+
+# Production environment - uses built-in tools
+x-production-config: &production-config
+  volumes:
+    - type: bind
+      source: ${WORKSPACE_DIR:-../}
+      target: /workspace
+      read_only: true
+    - type: bind
+      source: ${REPORTS_DIR:-./reports}
+      target: /reports
+      read_only: false
+  environment:
+    - PRODUCTION_MODE=true
+    - PYTHONPATH=/tools
+
+# Quick start service definitions
+x-quick-services:
+  # Quick SBOM scan
+  quick-sbom:
+    extends: sbom-agent
+    command: ["quick-scan", "/workspace", "--output", "/reports/quick-sbom.json"]
+    
+  # Quick security scan  
+  quick-security:
+    extends: security-scanner
+    command: ["quick-scan", "/workspace", "--output", "/reports/quick-security.json"]
+    
+  # Environment check
+  check-env:
+    extends: environment-validator
+    command: ["--json", "--output", "/reports/environment.json"]

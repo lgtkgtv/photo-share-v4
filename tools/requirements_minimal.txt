@@ -1,0 +1,31 @@
+# Minimal Requirements for SBOM Agent Docker Build
+# Core dependencies only
+
+# HTTP and utilities
+requests>=2.31.0
+click>=8.1.0
+rich>=13.7.0
+jinja2>=3.1.6
+pyyaml>=6.0.1
+
+# SBOM-specific dependencies  
+packageurl-python>=0.11.2
+cyclonedx-python-lib>=6.4.0
+spdx-tools>=0.8.2
+semantic-version>=2.10.0
+
+# Basic vulnerability scanning
+safety>=3.0.0
+pip-audit>=2.6.0
+
+# Multi-language support
+toml>=0.10.2
+python-dateutil>=2.8.2
+
+# Data processing
+pydantic>=2.5.0
+markdown>=3.5.0
+
+# Development tools
+packaging>=23.0
+python-dotenv>=1.0.0

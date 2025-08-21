@@ -1,0 +1,15 @@
+# Security-patched versions of vulnerable packages
+# These are the recommended secure versions for remediation
+
+jinja2==3.1.6            # ✅ Patched sandbox escape vulnerability
+pyyaml==6.0.1            # ✅ Safe YAML loading implementation
+requests==2.31.0         # ✅ Secure certificate validation
+flask==2.3.3             # ✅ Input validation improvements
+django==4.2.7            # ✅ Security fixes and improvements
+pillow==10.0.1           # ✅ FreeType security patches
+urllib3==2.0.7           # ✅ Certificate verification fixes
+werkzeug==2.3.7          # ✅ Debugger security enhancements
+
+# Updated secure versions
+click==8.1.7             # ✅ Latest stable with security fixes
+cryptography==41.0.7     # ✅ GCM and other cryptographic fixes

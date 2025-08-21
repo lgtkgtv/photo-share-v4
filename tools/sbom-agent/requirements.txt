@@ -1,0 +1,34 @@
+# SBOM Agent - Multi-language SBOM Generator
+# Version: 2.1.0
+
+# Core dependencies (inherited from base)
+requests>=2.31.0
+pydantic>=2.5.0
+click>=8.1.0
+rich>=13.7.0
+jinja2>=3.1.6
+pyyaml>=6.0.1
+
+# SBOM-specific dependencies
+packageurl-python>=0.11.2    # Package URL (PURL) support
+cyclonedx-python-lib>=6.4.0  # CycloneDX library
+spdx-tools>=0.8.2            # SPDX library
+semantic-version>=2.10.0     # Semantic versioning
+
+# Vulnerability scanning
+# osv-python>=1.4.0            # OSV API client - package not available
+safety>=3.0.0                # Python vulnerability scanner
+pip-audit>=2.6.0             # Pip package auditing
+
+# Multi-language support
+toml>=0.10.2                 # TOML parsing (Rust, Python)
+xmltodict>=0.13.0            # XML parsing (Maven, .NET)
+
+# State management and history
+# sqlite3-utils>=0.1.0         # Lightweight database for state - not needed, sqlite3 is built-in
+python-dateutil>=2.8.2       # Date utilities
+
+# Report generation
+jinja2>=3.1.6                # Template engine
+weasyprint>=60.0             # PDF generation
+markdown>=3.5.0              # Markdown processing

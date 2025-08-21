@@ -1,0 +1,18 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: services/photoshare/Dockerfile.database
+    env_file: .env
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONPATH=/app
+    networks:
+      - default
+      - platform_network
+
+networks:
+  platform_network:
+    external: true
+    name: photo-share-3_platform-network
