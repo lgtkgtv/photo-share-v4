@@ -1,0 +1,227 @@
+# Production Deployment Configuration for Photo Share Service
+version: '3.8'
+
+services:
+  # Main Photo Share Service
+  photo-share-platform:
+    build:
+      context: ./services/photoshare
+      dockerfile: Dockerfile.database
+      args:
+        - ENVIRONMENT=production
+    container_name: photo-share-service
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - POSTGRES_DB=${POSTGRES_DB:-photo_share}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_HOST=platform-db
+      - DB_PORT=5432
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - SECRET_KEY=${SECRET_KEY}
+      - REDIS_URL=redis://redis-cache:6379/0
+      - USE_REDIS_CACHE=true
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-https://yourdomain.com,https://www.yourdomain.com}
+      - RATE_LIMIT_REQUESTS_PER_MINUTE=${RATE_LIMIT_REQUESTS_PER_MINUTE:-60}
+      - SESSION_TIMEOUT_MINUTES=${SESSION_TIMEOUT_MINUTES:-30}
+      - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-50}
+      - SQL_DEBUG=false
+      - LOG_LEVEL=${LOG_LEVEL:-WARNING}
+    volumes:
+      - photo-storage:/app/photos
+      - ./logs:/app/logs
+    depends_on:
+      platform-db:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+    networks:
+      - backend
+      - monitoring
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.photo-share.rule=Host(`api.yourdomain.com`)"
+      - "traefik.http.routers.photo-share.tls=true"
+      - "traefik.http.routers.photo-share.tls.certresolver=letsencrypt"
+      - "traefik.http.services.photo-share.loadbalancer.server.port=8000"
+
+  # Production PostgreSQL Database
+  platform-db:
+    image: postgres:15-alpine
+    container_name: photo-share-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-photo_share}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+      - POSTGRES_HOST_AUTH_METHOD=scram-sha-256
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./monitoring/postgres-init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:5432:5432"  # Only bind to localhost for security
+    networks:
+      - backend
+      - monitoring
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-photo_share}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.2'
+          memory: 256M
+    command: >
+      postgres
+      -c shared_preload_libraries=pg_stat_statements
+      -c pg_stat_statements.track=all
+      -c max_connections=200
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+      -c maintenance_work_mem=64MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c work_mem=4MB
+
+  # Production Redis Cache
+  redis-cache:
+    image: redis:7-alpine
+    container_name: photo-share-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+      - ./monitoring/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    ports:
+      - "127.0.0.1:6379:6379"  # Only bind to localhost for security
+    networks:
+      - backend
+      - monitoring
+    command: redis-server /usr/local/etc/redis/redis.conf
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
+  # Nginx Reverse Proxy (optional)
+  nginx:
+    image: nginx:alpine
+    container_name: photo-share-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./ssl/certs:/etc/nginx/ssl:ro
+      - photo-storage:/var/www/photos:ro
+    depends_on:
+      - photo-share-platform
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
+  # Traefik Load Balancer (alternative to nginx)
+  traefik:
+    image: traefik:v3.0
+    container_name: photo-share-traefik
+    restart: unless-stopped
+    command:
+      - "--api.insecure=false"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.email=${LETSENCRYPT_EMAIL:-admin@yourdomain.com}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--log.level=INFO"
+      - "--metrics.prometheus=true"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "127.0.0.1:8080:8080"  # Traefik dashboard (localhost only)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-data:/letsencrypt
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    profiles:
+      - traefik  # Only start with --profile traefik
+
+# Volumes for persistent data
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+  photo-storage:
+    driver: local
+  traefik-data:
+    driver: local
+
+# Networks
+networks:
+  backend:
+    driver: bridge
+    name: photo-share-backend
+  monitoring:
+    external: true
+    name: photo-share-monitoring

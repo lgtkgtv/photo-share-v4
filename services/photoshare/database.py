@@ -129,13 +129,43 @@ class DatabaseManager:
     async def initialize(self):
         """Initialize database connection and create tables."""
         try:
+            # Production-optimized connection pool settings
+            environment = os.getenv("ENVIRONMENT", "development")
+            
+            if environment == "production":
+                # Production settings: more connections, better performance
+                pool_settings = {
+                    "pool_size": 50,        # Base number of connections
+                    "max_overflow": 100,    # Additional connections when busy
+                    "pool_timeout": 30,     # Wait time for connection
+                    "pool_recycle": 3600,   # Recycle connections every hour
+                    "pool_pre_ping": True,  # Validate connections
+                    "echo": False,          # Disable SQL logging in production
+                }
+            elif environment == "test":
+                # Test settings: minimal connections, fast cleanup
+                pool_settings = {
+                    "pool_size": 5,
+                    "max_overflow": 10,
+                    "pool_timeout": 10,
+                    "pool_recycle": 300,
+                    "pool_pre_ping": True,
+                    "echo": False,
+                }
+            else:
+                # Development settings: moderate connections, debugging enabled
+                pool_settings = {
+                    "pool_size": 20,
+                    "max_overflow": 30,
+                    "pool_timeout": 20,
+                    "pool_recycle": 300,
+                    "pool_pre_ping": True,
+                    "echo": os.getenv("SQL_DEBUG", "false").lower() == "true",
+                }
+            
             self.engine = create_async_engine(
                 self.database_url,
-                echo=False,  # Set to True for SQL debugging
-                pool_size=20,
-                max_overflow=0,
-                pool_pre_ping=True,
-                pool_recycle=300
+                **pool_settings
             )
             
             self.session_factory = async_sessionmaker(
@@ -148,6 +178,9 @@ class DatabaseManager:
             async with self.engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
                 
+            # Log pool configuration
+            logger.info(f"Database pool initialized - Environment: {environment}")
+            logger.info(f"Pool size: {pool_settings['pool_size']}, Max overflow: {pool_settings['max_overflow']}")
             logger.info("Database initialized successfully")
             return True
             
@@ -190,6 +223,49 @@ class DatabaseManager:
         if self.engine:
             await self.engine.dispose()
             logger.info("Database connections closed")
+    
+    async def get_pool_status(self) -> dict:
+        """Get database connection pool status."""
+        if not self.engine:
+            return {"error": "Database not initialized"}
+        
+        pool = self.engine.pool
+        return {
+            "pool_size": pool.size(),
+            "checked_in_connections": pool.checkedin(),
+            "checked_out_connections": pool.checkedout(),
+            "overflow_connections": pool.overflow(),
+            "invalid_connections": pool.invalid(),
+            "total_connections": pool.size() + pool.overflow(),
+            "pool_recreate_count": getattr(pool, '_total_connects', 0),
+        }
+    
+    async def health_check(self) -> dict:
+        """Comprehensive database health check."""
+        try:
+            if not self.engine:
+                return {"healthy": False, "error": "Database not initialized"}
+            
+            # Test basic connection
+            async with self.get_session() as session:
+                result = await session.execute("SELECT 1 as test")
+                test_value = result.scalar()
+            
+            if test_value != 1:
+                return {"healthy": False, "error": "Connection test failed"}
+            
+            # Get pool statistics
+            pool_status = await self.get_pool_status()
+            
+            return {
+                "healthy": True,
+                "database_url": self.database_url.split('@')[-1] if '@' in self.database_url else "hidden",
+                "pool_status": pool_status,
+                "environment": os.getenv("ENVIRONMENT", "development")
+            }
+            
+        except Exception as e:
+            return {"healthy": False, "error": str(e)}
 
 # Global database manager instance
 db_manager = DatabaseManager()

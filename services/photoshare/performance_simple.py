@@ -11,6 +11,7 @@ import asyncio
 import time
 import json
 import logging
+import os
 from typing import Dict, Any, Optional, List, Union, Callable
 from datetime import datetime, timezone, timedelta
 from functools import wraps
@@ -19,7 +20,178 @@ from sqlalchemy.pool import QueuePool
 from sqlalchemy import select, func
 import hashlib
 
+# Redis imports with fallback
+try:
+    import redis.asyncio as redis
+    import aioredis
+    REDIS_AVAILABLE = True
+except ImportError:
+    REDIS_AVAILABLE = False
+    logger.warning("Redis not available - using memory cache only")
+
 logger = logging.getLogger(__name__)
+
+class RedisCacheManager:
+    """Production Redis cache manager with fallback to memory cache."""
+    
+    def __init__(self):
+        self.redis_client: Optional[redis.Redis] = None
+        self.redis_url = os.getenv("REDIS_URL", "redis://redis-cache:6379/0")
+        self.memory_fallback = None
+        self.cache_stats = {
+            "hits": 0,
+            "misses": 0,
+            "total_requests": 0,
+            "redis_errors": 0,
+            "fallback_usage": 0
+        }
+        self.default_ttl = 300  # 5 minutes
+        
+    async def initialize(self, **kwargs):
+        """Initialize Redis connection with fallback."""
+        if not REDIS_AVAILABLE:
+            logger.warning("Redis not available - initializing memory fallback")
+            self.memory_fallback = MemoryCacheManager()
+            await self.memory_fallback.initialize()
+            return False
+            
+        try:
+            # Create Redis connection
+            self.redis_client = redis.from_url(
+                self.redis_url,
+                encoding="utf-8",
+                decode_responses=True,
+                socket_connect_timeout=5,
+                socket_timeout=5,
+                retry_on_timeout=True,
+                health_check_interval=30
+            )
+            
+            # Test connection
+            await self.redis_client.ping()
+            logger.info(f"Redis cache initialized successfully: {self.redis_url}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Redis initialization failed: {e}")
+            logger.info("Falling back to memory cache")
+            self.memory_fallback = MemoryCacheManager()
+            await self.memory_fallback.initialize()
+            return False
+    
+    async def get(self, key: str) -> Optional[Any]:
+        """Get value from Redis with fallback."""
+        self.cache_stats["total_requests"] += 1
+        
+        # Use Redis if available
+        if self.redis_client:
+            try:
+                result = await self.redis_client.get(key)
+                if result:
+                    self.cache_stats["hits"] += 1
+                    return json.loads(result)
+                else:
+                    self.cache_stats["misses"] += 1
+                    return None
+            except Exception as e:
+                logger.error(f"Redis get error for key {key}: {e}")
+                self.cache_stats["redis_errors"] += 1
+        
+        # Fallback to memory cache
+        if self.memory_fallback:
+            self.cache_stats["fallback_usage"] += 1
+            return await self.memory_fallback.get(key)
+        
+        self.cache_stats["misses"] += 1
+        return None
+    
+    async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
+        """Set value in Redis with fallback."""
+        ttl = ttl or self.default_ttl
+        
+        # Use Redis if available
+        if self.redis_client:
+            try:
+                serialized = json.dumps(value, default=str)
+                await self.redis_client.setex(key, ttl, serialized)
+                return True
+            except Exception as e:
+                logger.error(f"Redis set error for key {key}: {e}")
+                self.cache_stats["redis_errors"] += 1
+        
+        # Fallback to memory cache
+        if self.memory_fallback:
+            await self.memory_fallback.set(key, value, ttl)
+            return True
+        
+        return False
+    
+    async def delete(self, key: str) -> bool:
+        """Delete key from Redis with fallback."""
+        # Use Redis if available
+        if self.redis_client:
+            try:
+                await self.redis_client.delete(key)
+                return True
+            except Exception as e:
+                logger.error(f"Redis delete error for key {key}: {e}")
+                self.cache_stats["redis_errors"] += 1
+        
+        # Fallback to memory cache
+        if self.memory_fallback:
+            await self.memory_fallback.delete(key)
+            return True
+        
+        return False
+    
+    async def clear_pattern(self, pattern: str) -> int:
+        """Clear keys matching pattern."""
+        if self.redis_client:
+            try:
+                keys = await self.redis_client.keys(pattern)
+                if keys:
+                    await self.redis_client.delete(*keys)
+                    return len(keys)
+            except Exception as e:
+                logger.error(f"Redis clear pattern error for {pattern}: {e}")
+                self.cache_stats["redis_errors"] += 1
+        
+        # Memory fallback doesn't support patterns easily
+        return 0
+    
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """Get Redis cache statistics."""
+        hit_rate = (self.cache_stats["hits"] / max(self.cache_stats["total_requests"], 1)) * 100
+        
+        stats = {
+            "cache_type": "redis_with_memory_fallback",
+            "redis_available": self.redis_client is not None,
+            "cache_hits": self.cache_stats["hits"],
+            "cache_misses": self.cache_stats["misses"],
+            "total_requests": self.cache_stats["total_requests"],
+            "hit_rate_percentage": round(hit_rate, 2),
+            "redis_errors": self.cache_stats["redis_errors"],
+            "fallback_usage": self.cache_stats["fallback_usage"],
+            "redis_url": self.redis_url if self.redis_client else "not_connected"
+        }
+        
+        # Add memory fallback stats if available
+        if self.memory_fallback:
+            memory_stats = self.memory_fallback.get_cache_stats()
+            stats["memory_fallback_stats"] = memory_stats
+        
+        return stats
+    
+    async def health_check(self) -> Dict[str, Any]:
+        """Health check for Redis connection."""
+        if self.redis_client:
+            try:
+                await self.redis_client.ping()
+                return {"redis_healthy": True, "connection_status": "connected"}
+            except Exception as e:
+                return {"redis_healthy": False, "connection_status": f"error: {e}"}
+        
+        return {"redis_healthy": False, "connection_status": "not_initialized"}
 
 class MemoryCacheManager:
     """Enhanced in-memory caching manager with intelligent expiration and warming."""
@@ -343,7 +515,15 @@ class PerformanceOptimizer:
     """Main performance optimization coordinator."""
     
     def __init__(self):
-        self.cache_manager = MemoryCacheManager()
+        # Use Redis cache in production, memory cache as fallback
+        environment = os.getenv("ENVIRONMENT", "development")
+        if environment == "production" or os.getenv("USE_REDIS_CACHE", "false").lower() == "true":
+            self.cache_manager = RedisCacheManager()
+            logger.info("Using Redis cache manager for production performance")
+        else:
+            self.cache_manager = MemoryCacheManager()
+            logger.info("Using memory cache manager for development")
+            
         self.pool_manager = ConnectionPoolManager()
         self.query_optimizer = QueryOptimizer()
         self.request_times = []

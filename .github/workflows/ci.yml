@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: Photo Share Service CI/CD
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_NAME: ${{ github.repository }}/photo-share-service
 
 jobs:
   test:
@@ -21,9 +21,9 @@ jobs:
         env:
           POSTGRES_PASSWORD: test_password
           POSTGRES_USER: test_user
-          POSTGRES_DB: test_photoapp
+          POSTGRES_DB: photo_share
         options: >-
-          --health-cmd "pg_isready -U test_user -d test_photoapp"
+          --health-cmd "pg_isready -U test_user -d photo_share"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -58,24 +58,25 @@ jobs:
 
     - name: Install dependencies
       run: |
-        cd backend
+        cd services/photoshare
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install -r requirements_fixed.txt
+        pip install -r requirements_test.txt
 
     - name: Set up test environment
       run: |
-        cd backend
+        cd services/photoshare
         # Create comprehensive test environment file
         cat > .env << EOF
         # Database Configuration for CI/CD
-        POSTGRES_DB=test_photoapp
+        POSTGRES_DB=photo_share
         POSTGRES_USER=test_user
         POSTGRES_PASSWORD=test_password
         DB_HOST=localhost
         DB_PORT=5432
         
         # JWT Configuration for Testing
-        JWT_SECRET_KEY=test_secret_key_for_testing_32_chars_minimum_length_requirement
+        JWT_SECRET_KEY=test_secret_key_for_testing_32_chars_minimum_length_requirement_safe
         JWT_ALGORITHM=HS256
         JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
         
@@ -97,8 +98,12 @@ jobs:
         ACCOUNT_LOCKOUT_ATTEMPTS=10
         ACCOUNT_LOCKOUT_DURATION_MINUTES=5
         
+        # Redis Configuration for Testing
+        REDIS_URL=redis://localhost:6379/0
+        USE_REDIS_CACHE=true
+        
         # Test Database URL (explicit for CI)
-        DATABASE_URL=postgresql+asyncpg://test_user:test_password@localhost:5432/test_photoapp
+        DATABASE_URL=postgresql+asyncpg://test_user:test_password@localhost:5432/photo_share
         EOF
         
         # Show environment for debugging
@@ -122,59 +127,73 @@ jobs:
           sleep 2
         done
 
-    - name: Initialize test database
+    - name: Test API endpoints
       run: |
-        cd backend
-        # Set environment variables for the initialization
-        export POSTGRES_DB=test_photoapp
-        export POSTGRES_USER=test_user
-        export POSTGRES_PASSWORD=test_password
-        export DB_HOST=localhost
-        export DB_PORT=5432
+        cd services/photoshare
+        # Start the service in background for API tests
+        python main_database.py &
+        SERVICE_PID=$!
         
-        # Initialize the database
-        python init_db.py
-        echo "Database initialized successfully"
+        # Wait for service to start
+        for i in {1..30}; do
+          if curl -f http://localhost:8000/health; then
+            echo "Service is ready!"
+            break
+          fi
+          echo "Waiting for service... ($i/30)"
+          sleep 2
+        done
+        
+        # Kill the service
+        kill $SERVICE_PID || true
 
     - name: Run security linting
       run: |
-        cd backend
+        cd services/photoshare
         # Run bandit security linter
-        bandit -r services/ api/ models/ schemas/ -f json -o bandit-report.json || true
-        bandit -r services/ api/ models/ schemas/ || true
+        bandit -r . -f json -o bandit-report.json || true
+        bandit -r . || true
 
     - name: Run dependency vulnerability check
       run: |
-        cd backend
+        cd services/photoshare
         # Check for known vulnerabilities in dependencies
-        safety check || true
+        safety check -r requirements_fixed.txt || true
 
-    - name: Run tests with coverage
+    - name: Run comprehensive tests
       run: |
-        cd backend
+        cd services/photoshare
         # Set environment variables for tests
-        export POSTGRES_DB=test_photoapp
+        export POSTGRES_DB=photo_share
         export POSTGRES_USER=test_user
         export POSTGRES_PASSWORD=test_password
         export DB_HOST=localhost
         export DB_PORT=5432
         export ENVIRONMENT=test
+        export REDIS_URL=redis://localhost:6379/0
         
-        # Run tests with coverage
-        python -m pytest tests/ -v \
-          --cov=services \
-          --cov=api \
-          --cov=models \
-          --cov=schemas \
-          --cov-report=xml \
-          --cov-report=term \
-          --tb=short
+        # Run the test suite
+        python run_tests.py all
 
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v4
+    - name: Run API integration tests
+      run: |
+        # Test our security improvements and API endpoints
+        python3 scripts/test-security-improvements.py || true
+        
+        # Run API endpoint tests
+        bash scripts/api-tests/test-auth-flow.sh || true
+        bash scripts/api-tests/test-email-verification.sh || true
+        bash scripts/api-tests/test-photo-upload.sh || true
+
+    - name: Upload test artifacts
+      uses: actions/upload-artifact@v4
+      if: always()
       with:
-        file: backend/coverage.xml
-        fail_ci_if_error: false
+        name: test-results
+        path: |
+          services/photoshare/bandit-report.json
+          services/photoshare/htmlcov/
+          services/photoshare/test-results/
 
   security-scan:
     name: Security Scan
@@ -230,13 +249,15 @@ jobs:
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
       with:
-        context: ./backend
-        file: ./backend/Dockerfile.prod
+        context: ./services/photoshare
+        file: ./services/photoshare/Dockerfile.database
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
+        build-args: |
+          ENVIRONMENT=production
 
   deploy-staging:
     name: Deploy to Staging

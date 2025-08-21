@@ -1,0 +1,47 @@
+# AlertManager Configuration
+global:
+  smtp_smarthost: 'localhost:587'
+  smtp_from: 'alertmanager@photo-share-service.com'
+
+route:
+  group_by: ['alertname']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: 'web.hook'
+
+receivers:
+- name: 'web.hook'
+  webhook_configs:
+  - url: 'http://127.0.0.1:5001/'
+    send_resolved: true
+
+# Email notifications (configure SMTP settings above)
+# - name: 'email'
+#   email_configs:
+#   - to: 'admin@photo-share-service.com'
+#     subject: 'Photo Share Service Alert: {{ .GroupLabels.alertname }}'
+#     body: |
+#       {{ range .Alerts }}
+#       Alert: {{ .Annotations.summary }}
+#       Description: {{ .Annotations.description }}
+#       {{ end }}
+
+# Slack notifications (requires webhook URL)
+# - name: 'slack'
+#   slack_configs:
+#   - api_url: 'YOUR_SLACK_WEBHOOK_URL'
+#     channel: '#alerts'
+#     title: 'Photo Share Service Alert'
+#     text: |
+#       {{ range .Alerts }}
+#       {{ .Annotations.summary }}
+#       {{ .Annotations.description }}
+#       {{ end }}
+
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'dev', 'instance']

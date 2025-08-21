@@ -1,0 +1,159 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Photo Share Service - Overview",
+    "tags": ["photo-share", "overview"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Request Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(photo_share_requests_total[5m])",
+            "legendFormat": "Requests/sec"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "color": {
+              "mode": "palette-classic"
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Error Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(photo_share_requests_total{status=~\"5..\"}[5m])",
+            "legendFormat": "5xx Errors/sec"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 0.01},
+                {"color": "red", "value": 0.1}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Response Times",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(photo_share_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "50th percentile"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(photo_share_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "95th percentile"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(photo_share_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "99th percentile"
+          }
+        ],
+        "yAxes": [
+          {
+            "unit": "s",
+            "min": 0
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8}
+      },
+      {
+        "id": 4,
+        "title": "Cache Performance",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "(photo_share_cache_hits_total / (photo_share_cache_hits_total + photo_share_cache_misses_total)) * 100",
+            "legendFormat": "Hit Rate %"
+          },
+          {
+            "expr": "rate(photo_share_cache_hits_total[5m])",
+            "legendFormat": "Cache Hits/sec"
+          }
+        ],
+        "yAxes": [
+          {
+            "unit": "percent",
+            "max": 100,
+            "min": 0
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+      },
+      {
+        "id": 5,
+        "title": "Database Performance",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(photo_share_database_queries_total[5m])",
+            "legendFormat": "Queries/sec"
+          },
+          {
+            "expr": "photo_share_database_connections_active",
+            "legendFormat": "Active Connections"
+          }
+        ],
+        "yAxes": [
+          {
+            "unit": "short",
+            "min": 0
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+      },
+      {
+        "id": 6,
+        "title": "User Activity",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "photo_share_users_total",
+            "legendFormat": "Total Users"
+          },
+          {
+            "expr": "photo_share_photos_total",
+            "legendFormat": "Total Photos"
+          },
+          {
+            "expr": "photo_share_active_sessions",
+            "legendFormat": "Active Sessions"
+          }
+        ],
+        "yAxes": [
+          {
+            "unit": "short",
+            "min": 0
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24}
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "10s"
+  }
+}
