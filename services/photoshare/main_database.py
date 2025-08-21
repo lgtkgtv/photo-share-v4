@@ -62,12 +62,42 @@ logger = logging.getLogger(__name__)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 
-# JWT Configuration
+# JWT Configuration with enhanced security validation
 SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 if not SECRET_KEY:
     raise ValueError("JWT_SECRET_KEY environment variable must be set for security")
+
+# Validate JWT secret strength
+if len(SECRET_KEY) < 32:
+    raise ValueError("JWT_SECRET_KEY must be at least 32 characters for security")
+
+# Check for common weak secrets
+weak_secrets = [
+    "your-very-secure", "generate_with_script", "change_this", 
+    "secret-key", "test-secret", "dev-secret"
+]
+if any(weak in SECRET_KEY.lower() for weak in weak_secrets):
+    raise ValueError("JWT_SECRET_KEY appears to be a template value. Generate a secure secret!")
+
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("SESSION_TIMEOUT_MINUTES", "30"))
+
+# Additional security configuration
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", "50"))
+RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_REQUESTS_PER_MINUTE", "60"))
+
+# Security warnings for production
+if ENVIRONMENT == "production":
+    if ACCESS_TOKEN_EXPIRE_MINUTES > 60:
+        logger.warning("Long JWT expiration time in production (>60 min)")
+    if MAX_FILE_SIZE_MB > 100:
+        logger.warning("Large file upload limit in production (>100MB)")
+    
+    # Ensure HTTPS in production (if behind proxy)
+    allowed_origins = os.getenv("ALLOWED_ORIGINS", "")
+    if "http://" in allowed_origins and "localhost" not in allowed_origins:
+        logger.warning("HTTP origins detected in production - ensure HTTPS is used!")
 
 # Pydantic models for API
 class UserRegistration(BaseModel):

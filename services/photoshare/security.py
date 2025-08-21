@@ -523,35 +523,59 @@ class InputValidator:
     
     @staticmethod
     def validate_file_upload(file_content: bytes, content_type: str, max_size: int = 50 * 1024 * 1024) -> tuple[bool, str]:
-        """Validate uploaded file for security."""
+        """Validate uploaded file for security - PHOTOS ONLY."""
         # Check file size
         if len(file_content) > max_size:
             return False, f"File too large (max: {max_size // (1024*1024)}MB)"
         
-        # Check for malicious content in file headers
-        malicious_signatures = [
-            b"<script", b"javascript:", b"<iframe", b"<object",
-            b"<?php", b"<%", b"<html", b"<body"
+        # STRICT: Only allow image files for photo sharing service
+        allowed_content_types = [
+            "image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"
         ]
         
-        file_start = file_content[:1024].lower()  # Check first 1KB
+        if content_type not in allowed_content_types:
+            return False, f"Invalid file type. Only images allowed: {', '.join(allowed_content_types)}"
+        
+        # Check for malicious content in file headers (expanded list)
+        malicious_signatures = [
+            b"<script", b"javascript:", b"<iframe", b"<object",
+            b"<?php", b"<%", b"<html", b"<body", b"<svg", b"<xml",
+            b"#!/bin/", b"#!/usr/bin/", b"<embed", b"<link",
+            b"data:text/", b"data:application/"
+        ]
+        
+        file_start = file_content[:2048].lower()  # Check first 2KB
         for signature in malicious_signatures:
             if signature in file_start:
                 return False, "File contains potentially malicious content"
         
-        # Validate content type matches file content
-        if content_type.startswith("image/"):
-            # Check for common image headers
-            image_headers = [
-                b"\xFF\xD8\xFF",  # JPEG
-                b"\x89PNG\r\n\x1a\n",  # PNG
-                b"GIF87a", b"GIF89a",  # GIF
-                b"RIFF", b"WEBP"  # WebP
-            ]
-            
-            has_valid_header = any(file_content.startswith(header) for header in image_headers)
-            if not has_valid_header:
-                return False, "Image file format validation failed"
+        # STRICT: Validate content type matches actual file content (magic number validation)
+        image_headers = {
+            "image/jpeg": [b"\xFF\xD8\xFF"],
+            "image/jpg": [b"\xFF\xD8\xFF"],
+            "image/png": [b"\x89PNG\r\n\x1a\n"],
+            "image/gif": [b"GIF87a", b"GIF89a"],
+            "image/webp": [b"RIFF"]  # WebP starts with RIFF, followed by file size, then WEBP
+        }
+        
+        # Get expected headers for the content type
+        expected_headers = image_headers.get(content_type, [])
+        if not expected_headers:
+            return False, f"Unsupported image format: {content_type}"
+        
+        # Check if file content starts with valid magic number
+        has_valid_header = any(file_content.startswith(header) for header in expected_headers)
+        if not has_valid_header:
+            return False, f"File content does not match declared type: {content_type}"
+        
+        # Additional WebP validation
+        if content_type == "image/webp":
+            if len(file_content) < 12 or file_content[8:12] != b"WEBP":
+                return False, "Invalid WebP file format"
+        
+        # Check minimum file size (prevent empty or tiny malicious files)
+        if len(file_content) < 100:
+            return False, "File too small to be a valid image"
         
         return True, "File validation passed"
     

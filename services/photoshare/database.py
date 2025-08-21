@@ -10,7 +10,7 @@ import os
 import asyncio
 from datetime import datetime, timezone
 from typing import AsyncGenerator, Optional
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, LargeBinary
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, LargeBinary, ForeignKey
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -34,10 +34,10 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, index=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-    is_verified = Column(Boolean, default=False)
-    is_active = Column(Boolean, default=True)
+    is_verified = Column(Boolean, default=False, index=True)
+    is_active = Column(Boolean, default=True, index=True)
     
     def to_dict(self):
         return {
@@ -53,7 +53,7 @@ class Photo(Base):
     __tablename__ = "photos"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, nullable=False)  # Should be ForeignKey in production
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     filename = Column(String(255), nullable=False)
     original_filename = Column(String(255), nullable=False)
     content_type = Column(String(100), nullable=False)
@@ -61,8 +61,8 @@ class Photo(Base):
     storage_path = Column(String(500), nullable=False)
     title = Column(String(255), nullable=True)
     description = Column(Text, nullable=True)
-    is_public = Column(Boolean, default=False)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    is_public = Column(Boolean, default=False, index=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
     def to_dict(self):
@@ -85,11 +85,11 @@ class Session(Base):
     __tablename__ = "sessions"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, nullable=False)  # Should be ForeignKey in production
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     token = Column(String(255), unique=True, index=True, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    expires_at = Column(DateTime(timezone=True), nullable=True)
-    is_active = Column(Boolean, default=True)
+    expires_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    is_active = Column(Boolean, default=True, index=True)
     
     def to_dict(self):
         return {
@@ -107,8 +107,8 @@ class EmailVerification(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), nullable=False, index=True)
     secret = Column(String(255), unique=True, index=True, nullable=False)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    expires_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
     
     def to_dict(self):
         return {

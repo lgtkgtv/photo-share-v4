@@ -1,7 +1,12 @@
 __pycache__/
 *.pyc
+.env
 .env.*
+!.env.example
 *.sqlite3
 /test.db
 .idea/
 .vscode/
+*.log
+.DS_Store
+Thumbs.db
