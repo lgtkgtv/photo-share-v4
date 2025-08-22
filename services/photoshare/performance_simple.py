@@ -20,6 +20,8 @@ from sqlalchemy.pool import QueuePool
 from sqlalchemy import select, func
 import hashlib
 
+logger = logging.getLogger(__name__)
+
 # Redis imports with fallback
 try:
     import redis.asyncio as redis
@@ -28,8 +30,6 @@ try:
 except ImportError:
     REDIS_AVAILABLE = False
     logger.warning("Redis not available - using memory cache only")
-
-logger = logging.getLogger(__name__)
 
 class RedisCacheManager:
     """Production Redis cache manager with fallback to memory cache."""
@@ -288,6 +288,13 @@ class MemoryCacheManager:
             del self.memory_cache[key]
             return True
         return False
+    
+    async def clear(self) -> bool:
+        """Clear all cache entries."""
+        self.memory_cache.clear()
+        self.cache_access_frequency.clear()
+        self.cache_stats["evictions"] += len(self.memory_cache)
+        return True
     
     async def clear_pattern(self, pattern: str) -> int:
         """Clear cache keys matching pattern."""

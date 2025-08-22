@@ -1,0 +1,114 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Report - development_1755859703_c121d4bd</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .header { background: #f5f5f5; padding: 20px; border-radius: 5px; }
+        .summary { display: flex; gap: 20px; margin: 20px 0; }
+        .metric { background: #e9ecef; padding: 15px; border-radius: 5px; text-align: center; }
+        .metric.success { background: #d4edda; }
+        .metric.warning { background: #fff3cd; }
+        .metric.danger { background: #f8d7da; }
+        .results-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        .results-table th, .results-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        .results-table th { background: #f2f2f2; }
+        .status-passed { color: #28a745; font-weight: bold; }
+        .status-failed { color: #dc3545; font-weight: bold; }
+        .status-skipped { color: #6c757d; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Test Execution Report</h1>
+        <p><strong>Session ID:</strong> development_1755859703_c121d4bd</p>
+        <p><strong>Stage:</strong> development</p>
+        <p><strong>Execution Time:</strong> 2025-08-22 10:48:23.639029+00:00 - 2025-08-22 10:48:24.726028+00:00</p>
+        <p><strong>Duration:</strong> 1.09 seconds</p>
+    </div>
+    
+    <div class="summary">
+        <div class="metric danger">
+            <h3>0/2</h3>
+            <p>Tests Passed</p>
+        </div>
+        <div class="metric warning">
+            <h3>0.0%</h3>
+            <p>Code Coverage</p>
+        </div>
+        <div class="metric warning">
+            <h3>0.0%</h3>
+            <p>Security Score</p>
+        </div>
+        <div class="metric">
+            <h3>1.1s</h3>
+            <p>Total Duration</p>
+        </div>
+    </div>
+    
+    <h2>Test Results by Category</h2>
+    <table class="results-table">
+        <thead>
+            <tr>
+                <th>Category</th>
+                <th>Test Name</th>
+                <th>Status</th>
+                <th>Duration</th>
+                <th>Coverage</th>
+                <th>Security Score</th>
+            </tr>
+        </thead>
+        <tbody>
+
+            <tr>
+                <td>unit</td>
+                <td>unit_tests</td>
+                <td class="status-failed">FAILED</td>
+                <td>0.66s</td>
+                <td>N/A</td>
+                <td>N/A</td>
+            </tr>
+
+            <tr>
+                <td>integration</td>
+                <td>integration_tests</td>
+                <td class="status-failed">FAILED</td>
+                <td>0.43s</td>
+                <td>N/A</td>
+                <td>N/A</td>
+            </tr>
+
+        </tbody>
+    </table>
+    
+    <h2>Failed Tests</h2>
+<ul>
+                <li>
+                    <strong>unit - unit_tests</strong><br>
+                    <pre style="background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto;">ImportError while loading conftest '/home/s/lgtk/photo-share-consul/tests/conftest.py'.
+tests/conftest.py:13: in <module>
+    from fastapi.testclient import TestClient
+test_env/lib/python3.12/site-packages/fastapi/testclient.py:1: in <module>
+    from starlette.testclient import TestClient as TestClient  # noqa
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+test_env/lib/python3.12/site-packages/starlette/testclient.py:46: in <module>
+    raise RuntimeError(
+E   RuntimeError: The s...</pre>
+                </li>
+
+                <li>
+                    <strong>integration - integration_tests</strong><br>
+                    <pre style="background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto;">ImportError while loading conftest '/home/s/lgtk/photo-share-consul/tests/conftest.py'.
+tests/conftest.py:13: in <module>
+    from fastapi.testclient import TestClient
+test_env/lib/python3.12/site-packages/fastapi/testclient.py:1: in <module>
+    from starlette.testclient import TestClient as TestClient  # noqa
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+test_env/lib/python3.12/site-packages/starlette/testclient.py:46: in <module>
+    raise RuntimeError(
+E   RuntimeError: The s...</pre>
+                </li>
+</ul>
+</body>
+</html>

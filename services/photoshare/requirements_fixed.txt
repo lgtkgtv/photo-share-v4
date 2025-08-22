@@ -11,6 +11,10 @@ aiohttp==3.9.1
 redis==5.0.1
 aioredis==2.0.1
 
+# Image processing
+Pillow==10.1.0
+pillow-heif==0.13.0  # HEIF/HEIC support
+
 # Prometheus monitoring
 prometheus-client==0.19.0
 

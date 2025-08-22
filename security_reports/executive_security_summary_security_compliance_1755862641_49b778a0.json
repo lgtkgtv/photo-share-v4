@@ -1,0 +1,21 @@
+{
+  "report_id": "security_compliance_1755862641_49b778a0",
+  "assessment_date": "2025-08-22T11:37:31.946947+00:00",
+  "overall_security_posture": "NON_COMPLIANT",
+  "compliance_score": "6.2%",
+  "critical_issues": 2,
+  "high_risk_issues": 11,
+  "standards_assessed": [
+    "owasp",
+    "gdpr"
+  ],
+  "immediate_actions_required": 2,
+  "compliance_certificates": 0,
+  "next_assessment_date": "2026-08-22",
+  "key_recommendations": [
+    "Address all critical and high-risk findings",
+    "Implement automated security testing in CI/CD pipeline",
+    "Conduct regular penetration testing",
+    "Establish security awareness training program"
+  ]
+}

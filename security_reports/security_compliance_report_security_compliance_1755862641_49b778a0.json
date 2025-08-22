@@ -1,0 +1,649 @@
+{
+  "report_metadata": {
+    "report_id": "security_compliance_1755862641_49b778a0",
+    "generation_time": "2025-08-22T11:37:31.946947+00:00",
+    "standards_assessed": [
+      "owasp",
+      "gdpr"
+    ],
+    "overall_compliance_score": 6.25
+  },
+  "executive_summary": {
+    "overall_compliance_score": 6.25,
+    "total_tests_executed": 16,
+    "tests_passed": 1,
+    "tests_failed": 15,
+    "critical_findings": 2,
+    "high_risk_findings": 11,
+    "compliance_status": "NON_COMPLIANT",
+    "key_recommendations": [
+      "Address all critical and high-risk findings",
+      "Implement automated security testing in CI/CD pipeline",
+      "Conduct regular penetration testing",
+      "Establish security awareness training program"
+    ]
+  },
+  "risk_assessment": {
+    "critical": 2,
+    "high": 11,
+    "medium": 2,
+    "low": 1
+  },
+  "test_results": [
+    {
+      "test_id": "A01_2021",
+      "test_name": "Broken Access Control",
+      "standard": "OWASP Top 10 2021",
+      "category": "Application Security",
+      "status": "failed",
+      "compliance_level": "ComplianceLevel.NON_COMPLIANT",
+      "risk_level": "critical",
+      "description": "Access control enforcement failures",
+      "evidence": [
+        "Test execution output: 3040 characters",
+        "Test duration: 0.80 seconds",
+        "Exit code: 2"
+      ],
+      "recommendations": [
+        "Fix Broken Access Control vulnerabilities identified",
+        "Review security controls implementation",
+        "Conduct penetration testing for this category"
+      ],
+      "remediation_effort": "medium",
+      "business_impact": "high",
+      "technical_details": {
+        "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.12.3, pytest-8.4.1, pluggy-1.6.0 -- /home/s/lgtk/photo-share-consul/test_env/bin/python\ncachedir: .pytest_cache\nmetadata: {'Python': '3.12.3', 'Platform': 'Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39', 'Packages': {'pytest': '8.4.1', 'pluggy': '1.6.0'}, 'Plugins': {'asyncio': '1.1.0', 'cov': '6.2.1', 'metadata': '3.1.1', 'anyio': '4.10.0', 'html': '4.1.1', 'mock': '3.14.1'}}\nrootdir: /home/s/lgtk/photo-share-consul/tests\nconfigfile: pytest.ini\nplugins: asyncio-1.1.0, cov-6.2.1, metadata-3.1.1, anyio-4.10.0, html-4.1.1, mock-3.14.1\nasyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function\ncollecting ... collected 0 items / 1 error\n\n==================================== ERRORS ====================================\n______________ ERROR collecting security/test_owasp_compliance.py ______________\nImportError while impor",
+        "stderr": "",
+        "duration": 0.796605110168457,
+        "tests_run": [
+          "unauthorized_access",
+          "privilege_escalation",
+          "cors_bypass"
+        ]
+      }
+    },
+    {
+      "test_id": "A02_2021",
+      "test_name": "Cryptographic Failures",
+      "standard": "OWASP Top 10 2021",
+      "category": "Application Security",
+      "status": "failed",
+      "compliance_level": "ComplianceLevel.NON_COMPLIANT",
+      "risk_level": "high",
+      "description": "Failures related to cryptography",
+      "evidence": [
+        "Test execution output: 3040 characters",
+        "Test duration: 0.74 seconds",
+        "Exit code: 2"
+      ],
+      "recommendations": [
+        "Fix Cryptographic Failures vulnerabilities identified",
+        "Review security controls implementation",
+        "Conduct penetration testing for this category"
+      ],
+      "remediation_effort": "medium",
+      "business_impact": "medium",
+      "technical_details": {
+        "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.12.3, pytest-8.4.1, pluggy-1.6.0 -- /home/s/lgtk/photo-share-consul/test_env/bin/python\ncachedir: .pytest_cache\nmetadata: {'Python': '3.12.3', 'Platform': 'Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39', 'Packages': {'pytest': '8.4.1', 'pluggy': '1.6.0'}, 'Plugins': {'asyncio': '1.1.0', 'cov': '6.2.1', 'metadata': '3.1.1', 'anyio': '4.10.0', 'html': '4.1.1', 'mock': '3.14.1'}}\nrootdir: /home/s/lgtk/photo-share-consul/tests\nconfigfile: pytest.ini\nplugins: asyncio-1.1.0, cov-6.2.1, metadata-3.1.1, anyio-4.10.0, html-4.1.1, mock-3.14.1\nasyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function\ncollecting ... collected 0 items / 1 error\n\n==================================== ERRORS ====================================\n______________ ERROR collecting security/test_owasp_compliance.py ______________\nImportError while impor",
+        "stderr": "",
+        "duration": 0.7379279136657715,
+        "tests_run": [
+          "weak_crypto",
+          "exposed_secrets",
+          "insecure_transmission"
+        ]
+      }
+    },
+    {
+      "test_id": "A03_2021",
+      "test_name": "Injection",
+      "standard": "OWASP Top 10 2021",
+      "category": "Application Security",
+      "status": "failed",
+      "compliance_level": "ComplianceLevel.NON_COMPLIANT",
+      "risk_level": "critical",
+      "description": "Injection flaws including SQL, NoSQL, LDAP",
+      "evidence": [
+        "Test execution output: 3040 characters",
+        "Test duration: 0.73 seconds",
+        "Exit code: 2"
+      ],
+      "recommendations": [
+        "Fix Injection vulnerabilities identified",
+        "Review security controls implementation",
+        "Conduct penetration testing for this category"
+      ],
+      "remediation_effort": "medium",
+      "business_impact": "high",
+      "technical_details": {
+        "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.12.3, pytest-8.4.1, pluggy-1.6.0 -- /home/s/lgtk/photo-share-consul/test_env/bin/python\ncachedir: .pytest_cache\nmetadata: {'Python': '3.12.3', 'Platform': 'Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39', 'Packages': {'pytest': '8.4.1', 'pluggy': '1.6.0'}, 'Plugins': {'asyncio': '1.1.0', 'cov': '6.2.1', 'metadata': '3.1.1', 'anyio': '4.10.0', 'html': '4.1.1', 'mock': '3.14.1'}}\nrootdir: /home/s/lgtk/photo-share-consul/tests\nconfigfile: pytest.ini\nplugins: asyncio-1.1.0, cov-6.2.1, metadata-3.1.1, anyio-4.10.0, html-4.1.1, mock-3.14.1\nasyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function\ncollecting ... collected 0 items / 1 error\n\n==================================== ERRORS ====================================\n______________ ERROR collecting security/test_owasp_compliance.py ______________\nImportError while impor",
+        "stderr": "",
+        "duration": 0.7340285778045654,
+        "tests_run": [
+          "sql_injection",
+          "nosql_injection",
+          "command_injection"
+        ]
+      }
+    },
+    {
+      "test_id": "A04_2021",
+      "test_name": "Insecure Design",
+      "standard": "OWASP Top 10 2021",
+      "category": "Application Security",
+      "status": "failed",
+      "compliance_level": "ComplianceLevel.NON_COMPLIANT",
+      "risk_level": "high",
+      "description": "Insecure design flaws",
+      "evidence": [
+        "Test execution output: 3040 characters",
+        "Test duration: 0.73 seconds",
+        "Exit code: 2"
+      ],
+      "recommendations": [
+        "Fix Insecure Design vulnerabilities identified",
+        "Review security controls implementation",
+        "Conduct penetration testing for this category"
+      ],
+      "remediation_effort": "medium",
+      "business_impact": "medium",
+      "technical_details": {
+        "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.12.3, pytest-8.4.1, pluggy-1.6.0 -- /home/s/lgtk/photo-share-consul/test_env/bin/python\ncachedir: .pytest_cache\nmetadata: {'Python': '3.12.3', 'Platform': 'Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39', 'Packages': {'pytest': '8.4.1', 'pluggy': '1.6.0'}, 'Plugins': {'asyncio': '1.1.0', 'cov': '6.2.1', 'metadata': '3.1.1', 'anyio': '4.10.0', 'html': '4.1.1', 'mock': '3.14.1'}}\nrootdir: /home/s/lgtk/photo-share-consul/tests\nconfigfile: pytest.ini\nplugins: asyncio-1.1.0, cov-6.2.1, metadata-3.1.1, anyio-4.10.0, html-4.1.1, mock-3.14.1\nasyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function\ncollecting ... collected 0 items / 1 error\n\n==================================== ERRORS ====================================\n______________ ERROR collecting security/test_owasp_compliance.py ______________\nImportError while impor",
+        "stderr": "",
+        "duration": 0.7343111038208008,
+        "tests_run": [
+          "threat_modeling",
+          "security_controls",
+          "design_patterns"
+        ]
+      }
+    },
+    {
+      "test_id": "A05_2021",
+      "test_name": "Security Misconfiguration",
+      "standard": "OWASP Top 10 2021",
+      "category": "Application Security",
+      "status": "failed",
+      "compliance_level": "ComplianceLevel.NON_COMPLIANT",
+      "risk_level": "medium",
+      "description": "Security misconfiguration issues",
+      "evidence": [
+        "Test execution output: 3040 characters",
+        "Test duration: 1.61 seconds",
+        "Exit code: 2"
+      ],
+      "recommendations": [
+        "Fix Security Misconfiguration vulnerabilities identified",
+        "Review security controls implementation",
+        "Conduct penetration testing for this category"
+      ],
+      "remediation_effort": "medium",
+      "business_impact": "medium",
+      "technical_details": {
+        "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.12.3, pytest-8.4.1, pluggy-1.6.0 -- /home/s/lgtk/photo-share-consul/test_env/bin/python\ncachedir: .pytest_cache\nmetadata: {'Python': '3.12.3', 'Platform': 'Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39', 'Packages': {'pytest': '8.4.1', 'pluggy': '1.6.0'}, 'Plugins': {'asyncio': '1.1.0', 'cov': '6.2.1', 'metadata': '3.1.1', 'anyio': '4.10.0', 'html': '4.1.1', 'mock': '3.14.1'}}\nrootdir: /home/s/lgtk/photo-share-consul/tests\nconfigfile: pytest.ini\nplugins: asyncio-1.1.0, cov-6.2.1, metadata-3.1.1, anyio-4.10.0, html-4.1.1, mock-3.14.1\nasyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function\ncollecting ... collected 0 items / 1 error\n\n==================================== ERRORS ====================================\n______________ ERROR collecting security/test_owasp_compliance.py ______________\nImportError while impor",
+        "stderr": "",
+        "duration": 1.6138861179351807,
+        "tests_run": [
+          "default_configs",
+          "missing_headers",
+          "error_disclosure"
+        ]
+      }
+    },
+    {
+      "test_id": "A06_2021",
+      "test_name": "Vulnerable and Outdated Components",
+      "standard": "OWASP Top 10 2021",
+      "category": "Application Security",
+      "status": "failed",
+      "compliance_level": "ComplianceLevel.NON_COMPLIANT",
+      "risk_level": "high",
+      "description": "Using components with known vulnerabilities",
+      "evidence": [
+        "Test execution output: 3040 characters",
+        "Test duration: 0.72 seconds",
+        "Exit code: 2"
+      ],
+      "recommendations": [
+        "Fix Vulnerable and Outdated Components vulnerabilities identified",
+        "Review security controls implementation",
+        "Conduct penetration testing for this category"
+      ],
+      "remediation_effort": "medium",
+      "business_impact": "medium",
+      "technical_details": {
+        "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.12.3, pytest-8.4.1, pluggy-1.6.0 -- /home/s/lgtk/photo-share-consul/test_env/bin/python\ncachedir: .pytest_cache\nmetadata: {'Python': '3.12.3', 'Platform': 'Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39', 'Packages': {'pytest': '8.4.1', 'pluggy': '1.6.0'}, 'Plugins': {'asyncio': '1.1.0', 'cov': '6.2.1', 'metadata': '3.1.1', 'anyio': '4.10.0', 'html': '4.1.1', 'mock': '3.14.1'}}\nrootdir: /home/s/lgtk/photo-share-consul/tests\nconfigfile: pytest.ini\nplugins: asyncio-1.1.0, cov-6.2.1, metadata-3.1.1, anyio-4.10.0, html-4.1.1, mock-3.14.1\nasyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function\ncollecting ... collected 0 items / 1 error\n\n==================================== ERRORS ====================================\n______________ ERROR collecting security/test_owasp_compliance.py ______________\nImportError while impor",
+        "stderr": "",
+        "duration": 0.7228045463562012,
+        "tests_run": [
+          "dependency_scan",
+          "version_check",
+          "license_compliance"
+        ]
+      }
+    },
+    {
+      "test_id": "A07_2021",
+      "test_name": "Identification and Authentication Failures",
+      "standard": "OWASP Top 10 2021",
+      "category": "Application Security",
+      "status": "failed",
+      "compliance_level": "ComplianceLevel.NON_COMPLIANT",
+      "risk_level": "high",
+      "description": "Authentication and session management failures",
+      "evidence": [
+        "Test execution output: 3040 characters",
+        "Test duration: 0.75 seconds",
+        "Exit code: 2"
+      ],
+      "recommendations": [
+        "Fix Identification and Authentication Failures vulnerabilities identified",
+        "Review security controls implementation",
+        "Conduct penetration testing for this category"
+      ],
+      "remediation_effort": "medium",
+      "business_impact": "medium",
+      "technical_details": {
+        "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.12.3, pytest-8.4.1, pluggy-1.6.0 -- /home/s/lgtk/photo-share-consul/test_env/bin/python\ncachedir: .pytest_cache\nmetadata: {'Python': '3.12.3', 'Platform': 'Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39', 'Packages': {'pytest': '8.4.1', 'pluggy': '1.6.0'}, 'Plugins': {'asyncio': '1.1.0', 'cov': '6.2.1', 'metadata': '3.1.1', 'anyio': '4.10.0', 'html': '4.1.1', 'mock': '3.14.1'}}\nrootdir: /home/s/lgtk/photo-share-consul/tests\nconfigfile: pytest.ini\nplugins: asyncio-1.1.0, cov-6.2.1, metadata-3.1.1, anyio-4.10.0, html-4.1.1, mock-3.14.1\nasyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function\ncollecting ... collected 0 items / 1 error\n\n==================================== ERRORS ====================================\n______________ ERROR collecting security/test_owasp_compliance.py ______________\nImportError while impor",
+        "stderr": "",
+        "duration": 0.7548587322235107,
+        "tests_run": [
+          "weak_auth",
+          "session_management",
+          "credential_stuffing"
+        ]
+      }
+    },
+    {
+      "test_id": "A08_2021",
+      "test_name": "Software and Data Integrity Failures",
+      "standard": "OWASP Top 10 2021",
+      "category": "Application Security",
+      "status": "failed",
+      "compliance_level": "ComplianceLevel.NON_COMPLIANT",
+      "risk_level": "high",
+      "description": "Software and data integrity failures",
+      "evidence": [
+        "Test execution output: 3040 characters",
+        "Test duration: 0.71 seconds",
+        "Exit code: 2"
+      ],
+      "recommendations": [
+        "Fix Software and Data Integrity Failures vulnerabilities identified",
+        "Review security controls implementation",
+        "Conduct penetration testing for this category"
+      ],
+      "remediation_effort": "medium",
+      "business_impact": "medium",
+      "technical_details": {
+        "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.12.3, pytest-8.4.1, pluggy-1.6.0 -- /home/s/lgtk/photo-share-consul/test_env/bin/python\ncachedir: .pytest_cache\nmetadata: {'Python': '3.12.3', 'Platform': 'Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39', 'Packages': {'pytest': '8.4.1', 'pluggy': '1.6.0'}, 'Plugins': {'asyncio': '1.1.0', 'cov': '6.2.1', 'metadata': '3.1.1', 'anyio': '4.10.0', 'html': '4.1.1', 'mock': '3.14.1'}}\nrootdir: /home/s/lgtk/photo-share-consul/tests\nconfigfile: pytest.ini\nplugins: asyncio-1.1.0, cov-6.2.1, metadata-3.1.1, anyio-4.10.0, html-4.1.1, mock-3.14.1\nasyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function\ncollecting ... collected 0 items / 1 error\n\n==================================== ERRORS ====================================\n______________ ERROR collecting security/test_owasp_compliance.py ______________\nImportError while impor",
+        "stderr": "",
+        "duration": 0.7060756683349609,
+        "tests_run": [
+          "supply_chain",
+          "code_integrity",
+          "update_mechanisms"
+        ]
+      }
+    },
+    {
+      "test_id": "A09_2021",
+      "test_name": "Security Logging and Monitoring Failures",
+      "standard": "OWASP Top 10 2021",
+      "category": "Application Security",
+      "status": "failed",
+      "compliance_level": "ComplianceLevel.NON_COMPLIANT",
+      "risk_level": "medium",
+      "description": "Insufficient logging and monitoring",
+      "evidence": [
+        "Test execution output: 3040 characters",
+        "Test duration: 0.71 seconds",
+        "Exit code: 2"
+      ],
+      "recommendations": [
+        "Fix Security Logging and Monitoring Failures vulnerabilities identified",
+        "Review security controls implementation",
+        "Conduct penetration testing for this category"
+      ],
+      "remediation_effort": "medium",
+      "business_impact": "medium",
+      "technical_details": {
+        "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.12.3, pytest-8.4.1, pluggy-1.6.0 -- /home/s/lgtk/photo-share-consul/test_env/bin/python\ncachedir: .pytest_cache\nmetadata: {'Python': '3.12.3', 'Platform': 'Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39', 'Packages': {'pytest': '8.4.1', 'pluggy': '1.6.0'}, 'Plugins': {'asyncio': '1.1.0', 'cov': '6.2.1', 'metadata': '3.1.1', 'anyio': '4.10.0', 'html': '4.1.1', 'mock': '3.14.1'}}\nrootdir: /home/s/lgtk/photo-share-consul/tests\nconfigfile: pytest.ini\nplugins: asyncio-1.1.0, cov-6.2.1, metadata-3.1.1, anyio-4.10.0, html-4.1.1, mock-3.14.1\nasyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function\ncollecting ... collected 0 items / 1 error\n\n==================================== ERRORS ====================================\n______________ ERROR collecting security/test_owasp_compliance.py ______________\nImportError while impor",
+        "stderr": "",
+        "duration": 0.7130451202392578,
+        "tests_run": [
+          "audit_logging",
+          "monitoring_coverage",
+          "incident_response"
+        ]
+      }
+    },
+    {
+      "test_id": "A10_2021",
+      "test_name": "Server-Side Request Forgery",
+      "standard": "OWASP Top 10 2021",
+      "category": "Application Security",
+      "status": "failed",
+      "compliance_level": "ComplianceLevel.NON_COMPLIANT",
+      "risk_level": "high",
+      "description": "SSRF flaws",
+      "evidence": [
+        "Test execution output: 3040 characters",
+        "Test duration: 0.72 seconds",
+        "Exit code: 2"
+      ],
+      "recommendations": [
+        "Fix Server-Side Request Forgery vulnerabilities identified",
+        "Review security controls implementation",
+        "Conduct penetration testing for this category"
+      ],
+      "remediation_effort": "medium",
+      "business_impact": "medium",
+      "technical_details": {
+        "stdout": "============================= test session starts ==============================\nplatform linux -- Python 3.12.3, pytest-8.4.1, pluggy-1.6.0 -- /home/s/lgtk/photo-share-consul/test_env/bin/python\ncachedir: .pytest_cache\nmetadata: {'Python': '3.12.3', 'Platform': 'Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39', 'Packages': {'pytest': '8.4.1', 'pluggy': '1.6.0'}, 'Plugins': {'asyncio': '1.1.0', 'cov': '6.2.1', 'metadata': '3.1.1', 'anyio': '4.10.0', 'html': '4.1.1', 'mock': '3.14.1'}}\nrootdir: /home/s/lgtk/photo-share-consul/tests\nconfigfile: pytest.ini\nplugins: asyncio-1.1.0, cov-6.2.1, metadata-3.1.1, anyio-4.10.0, html-4.1.1, mock-3.14.1\nasyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function\ncollecting ... collected 0 items / 1 error\n\n==================================== ERRORS ====================================\n______________ ERROR collecting security/test_owasp_compliance.py ______________\nImportError while impor",
+        "stderr": "",
+        "duration": 0.7182846069335938,
+        "tests_run": [
+          "ssrf_protection",
+          "url_validation",
+          "network_segmentation"
+        ]
+      }
+    },
+    {
+      "test_id": "GDPR_data_protection",
+      "test_name": "GDPR Data Protection",
+      "standard": "GDPR",
+      "category": "Privacy & Data Protection",
+      "status": "failed",
+      "compliance_level": "ComplianceLevel.PARTIALLY_COMPLIANT",
+      "risk_level": "high",
+      "description": "GDPR compliance assessment for data_protection",
+      "evidence": [
+        "Automated test execution: False",
+        "Test output length: 15839 characters"
+      ],
+      "recommendations": [
+        "Implement comprehensive privacy by design",
+        "Establish data subject rights procedures",
+        "Conduct regular privacy impact assessments"
+      ],
+      "remediation_effort": "high",
+      "business_impact": "critical",
+      "technical_details": {
+        "category": "data_protection",
+        "test_output": "============================= test session starts ==============================\nplatform linux -- Python 3.12.3, pytest-8.4.1, pluggy-1.6.0 -- /home/s/lgtk/photo-share-consul/test_env/bin/python\ncachedir: .pytest_cache\nmetadata: {'Python': '3.12.3', 'Platform': 'Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39', 'Packages': {'pytest': '8.4.1', 'pluggy': '1.6.0'}, 'Plugins': {'asyncio': '1.1.0', 'cov': '6.2.1', 'metadata': '3.1.1', 'anyio': '4.10.0', 'html': '4.1.1', 'mock': '3.14.1'"
+      }
+    },
+    {
+      "test_id": "GDPR_individual_rights",
+      "test_name": "GDPR Individual Rights",
+      "standard": "GDPR",
+      "category": "Privacy & Data Protection",
+      "status": "failed",
+      "compliance_level": "ComplianceLevel.PARTIALLY_COMPLIANT",
+      "risk_level": "high",
+      "description": "GDPR compliance assessment for individual_rights",
+      "evidence": [
+        "Automated test execution: False",
+        "Test output length: 15839 characters"
+      ],
+      "recommendations": [
+        "Implement comprehensive privacy by design",
+        "Establish data subject rights procedures",
+        "Conduct regular privacy impact assessments"
+      ],
+      "remediation_effort": "high",
+      "business_impact": "critical",
+      "technical_details": {
+        "category": "individual_rights",
+        "test_output": "============================= test session starts ==============================\nplatform linux -- Python 3.12.3, pytest-8.4.1, pluggy-1.6.0 -- /home/s/lgtk/photo-share-consul/test_env/bin/python\ncachedir: .pytest_cache\nmetadata: {'Python': '3.12.3', 'Platform': 'Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39', 'Packages': {'pytest': '8.4.1', 'pluggy': '1.6.0'}, 'Plugins': {'asyncio': '1.1.0', 'cov': '6.2.1', 'metadata': '3.1.1', 'anyio': '4.10.0', 'html': '4.1.1', 'mock': '3.14.1'"
+      }
+    },
+    {
+      "test_id": "GDPR_technical_measures",
+      "test_name": "GDPR Technical Measures",
+      "standard": "GDPR",
+      "category": "Privacy & Data Protection",
+      "status": "failed",
+      "compliance_level": "ComplianceLevel.PARTIALLY_COMPLIANT",
+      "risk_level": "high",
+      "description": "GDPR compliance assessment for technical_measures",
+      "evidence": [
+        "Automated test execution: False",
+        "Test output length: 15839 characters"
+      ],
+      "recommendations": [
+        "Implement comprehensive privacy by design",
+        "Establish data subject rights procedures",
+        "Conduct regular privacy impact assessments"
+      ],
+      "remediation_effort": "high",
+      "business_impact": "critical",
+      "technical_details": {
+        "category": "technical_measures",
+        "test_output": "============================= test session starts ==============================\nplatform linux -- Python 3.12.3, pytest-8.4.1, pluggy-1.6.0 -- /home/s/lgtk/photo-share-consul/test_env/bin/python\ncachedir: .pytest_cache\nmetadata: {'Python': '3.12.3', 'Platform': 'Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39', 'Packages': {'pytest': '8.4.1', 'pluggy': '1.6.0'}, 'Plugins': {'asyncio': '1.1.0', 'cov': '6.2.1', 'metadata': '3.1.1', 'anyio': '4.10.0', 'html': '4.1.1', 'mock': '3.14.1'"
+      }
+    },
+    {
+      "test_id": "VULN_SCAN_PYTHON_SAFETY_CHECK",
+      "test_name": "Python Safety Check Vulnerability Scan",
+      "standard": "Supply Chain Security",
+      "category": "Dependency Security",
+      "status": "failed",
+      "compliance_level": "ComplianceLevel.NON_COMPLIANT",
+      "risk_level": "high",
+      "description": "Dependency vulnerability scan using Python Safety Check",
+      "evidence": [
+        "Tool output: 0 characters",
+        "Exit code: 1",
+        "Vulnerabilities detected: True"
+      ],
+      "recommendations": [
+        "Update vulnerable dependencies",
+        "Implement automated dependency scanning",
+        "Establish dependency management policies"
+      ],
+      "remediation_effort": "medium",
+      "business_impact": "high",
+      "technical_details": {
+        "tool": "Python Safety Check",
+        "scan_output": "",
+        "vulnerabilities_found": true
+      }
+    },
+    {
+      "test_id": "VULN_SCAN_NPM_SECURITY_AUDIT",
+      "test_name": "NPM Security Audit Vulnerability Scan",
+      "standard": "Supply Chain Security",
+      "category": "Dependency Security",
+      "status": "failed",
+      "compliance_level": "ComplianceLevel.NON_COMPLIANT",
+      "risk_level": "high",
+      "description": "Dependency vulnerability scan using NPM Security Audit",
+      "evidence": [
+        "Tool output: 0 characters",
+        "Exit code: 1",
+        "Vulnerabilities detected: True"
+      ],
+      "recommendations": [
+        "Update vulnerable dependencies",
+        "Implement automated dependency scanning",
+        "Establish dependency management policies"
+      ],
+      "remediation_effort": "medium",
+      "business_impact": "high",
+      "technical_details": {
+        "tool": "NPM Security Audit",
+        "scan_output": "",
+        "vulnerabilities_found": true
+      }
+    },
+    {
+      "test_id": "VULN_SCAN_PIP_AUDIT",
+      "test_name": "Pip Audit Vulnerability Scan",
+      "standard": "Supply Chain Security",
+      "category": "Dependency Security",
+      "status": "passed",
+      "compliance_level": "ComplianceLevel.COMPLIANT",
+      "risk_level": "low",
+      "description": "Dependency vulnerability scan using Pip Audit",
+      "evidence": [
+        "Tool output: 0 characters",
+        "Exit code: 0",
+        "Vulnerabilities detected: False"
+      ],
+      "recommendations": [
+        "Continue regular dependency monitoring"
+      ],
+      "remediation_effort": "low",
+      "business_impact": "low",
+      "technical_details": {
+        "tool": "Pip Audit",
+        "scan_output": "",
+        "vulnerabilities_found": false
+      }
+    }
+  ],
+  "remediation_roadmap": [
+    {
+      "priority": "immediate",
+      "timeframe": "1-2 weeks",
+      "items": [
+        {
+          "test": "Broken Access Control",
+          "recommendations": [
+            "Fix Broken Access Control vulnerabilities identified",
+            "Review security controls implementation",
+            "Conduct penetration testing for this category"
+          ]
+        },
+        {
+          "test": "Injection",
+          "recommendations": [
+            "Fix Injection vulnerabilities identified",
+            "Review security controls implementation",
+            "Conduct penetration testing for this category"
+          ]
+        }
+      ]
+    },
+    {
+      "priority": "high",
+      "timeframe": "1-2 months",
+      "items": [
+        {
+          "test": "Cryptographic Failures",
+          "recommendations": [
+            "Fix Cryptographic Failures vulnerabilities identified",
+            "Review security controls implementation",
+            "Conduct penetration testing for this category"
+          ]
+        },
+        {
+          "test": "Insecure Design",
+          "recommendations": [
+            "Fix Insecure Design vulnerabilities identified",
+            "Review security controls implementation",
+            "Conduct penetration testing for this category"
+          ]
+        },
+        {
+          "test": "Vulnerable and Outdated Components",
+          "recommendations": [
+            "Fix Vulnerable and Outdated Components vulnerabilities identified",
+            "Review security controls implementation",
+            "Conduct penetration testing for this category"
+          ]
+        },
+        {
+          "test": "Identification and Authentication Failures",
+          "recommendations": [
+            "Fix Identification and Authentication Failures vulnerabilities identified",
+            "Review security controls implementation",
+            "Conduct penetration testing for this category"
+          ]
+        },
+        {
+          "test": "Software and Data Integrity Failures",
+          "recommendations": [
+            "Fix Software and Data Integrity Failures vulnerabilities identified",
+            "Review security controls implementation",
+            "Conduct penetration testing for this category"
+          ]
+        },
+        {
+          "test": "Server-Side Request Forgery",
+          "recommendations": [
+            "Fix Server-Side Request Forgery vulnerabilities identified",
+            "Review security controls implementation",
+            "Conduct penetration testing for this category"
+          ]
+        },
+        {
+          "test": "GDPR Data Protection",
+          "recommendations": [
+            "Implement comprehensive privacy by design",
+            "Establish data subject rights procedures",
+            "Conduct regular privacy impact assessments"
+          ]
+        },
+        {
+          "test": "GDPR Individual Rights",
+          "recommendations": [
+            "Implement comprehensive privacy by design",
+            "Establish data subject rights procedures",
+            "Conduct regular privacy impact assessments"
+          ]
+        },
+        {
+          "test": "GDPR Technical Measures",
+          "recommendations": [
+            "Implement comprehensive privacy by design",
+            "Establish data subject rights procedures",
+            "Conduct regular privacy impact assessments"
+          ]
+        },
+        {
+          "test": "Python Safety Check Vulnerability Scan",
+          "recommendations": [
+            "Update vulnerable dependencies",
+            "Implement automated dependency scanning",
+            "Establish dependency management policies"
+          ]
+        },
+        {
+          "test": "NPM Security Audit Vulnerability Scan",
+          "recommendations": [
+            "Update vulnerable dependencies",
+            "Implement automated dependency scanning",
+            "Establish dependency management policies"
+          ]
+        }
+      ]
+    },
+    {
+      "priority": "medium",
+      "timeframe": "3-6 months",
+      "items": [
+        {
+          "test": "Security Misconfiguration",
+          "recommendations": [
+            "Fix Security Misconfiguration vulnerabilities identified",
+            "Review security controls implementation",
+            "Conduct penetration testing for this category"
+          ]
+        },
+        {
+          "test": "Security Logging and Monitoring Failures",
+          "recommendations": [
+            "Fix Security Logging and Monitoring Failures vulnerabilities identified",
+            "Review security controls implementation",
+            "Conduct penetration testing for this category"
+          ]
+        }
+      ]
+    }
+  ],
+  "compliance_certificates": []
+}

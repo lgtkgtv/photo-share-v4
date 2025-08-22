@@ -23,9 +23,12 @@ logger = logging.getLogger(__name__)
 class RateLimiter:
     """Advanced rate limiting with multiple strategies."""
     
-    def __init__(self):
+    def __init__(self, requests_per_minute: int = 60, burst_limit: int = 20):
+        self.requests_per_minute = requests_per_minute
+        self.burst_limit = burst_limit
         self.requests = {}  # {client_id: [timestamp, ...]}
         self.blocked_ips = {}  # {ip: blocked_until_timestamp}
+        self.request_counts = {}  # For test compatibility
         self.cleanup_interval = 300  # 5 minutes
         self.last_cleanup = time.time()
     
@@ -679,36 +682,313 @@ class InputValidator:
         return True, "Valid"
 
 class JWTSecurity:
-    """Enhanced JWT security."""
+    """Enhanced JWT security with token tracking and revocation."""
     
     def __init__(self, secret_key: str):
         self.secret_key = secret_key
         self.revoked_tokens = set()  # In production, use Redis or database
+        self.active_tokens = {}  # Track active tokens {token_id: {user_id, issued_at, last_used}}
         self.token_blacklist_cleanup_interval = 3600  # 1 hour
         self.last_cleanup = time.time()
+        self.max_tokens_per_user = 5  # Limit concurrent sessions
+    
+    def track_token(self, token_id: str, user_id: int, issued_at):
+        """Track an active token for security monitoring."""
+        self.active_tokens[token_id] = {
+            "user_id": user_id,
+            "issued_at": issued_at,
+            "last_used": issued_at,
+            "access_count": 0
+        }
+        
+        # Enforce token limits per user
+        user_tokens = [tid for tid, data in self.active_tokens.items() if data["user_id"] == user_id]
+        if len(user_tokens) > self.max_tokens_per_user:
+            # Revoke oldest token
+            oldest_token = min(user_tokens, key=lambda t: self.active_tokens[t]["issued_at"])
+            self.revoke_token_by_id(oldest_token)
     
     def revoke_token(self, token: str):
         """Revoke a JWT token."""
         self.revoked_tokens.add(token)
-        logger.info(f"Token revoked: {token[:20]}...")
+        logger.warning(f"Token revoked: {token[:20]}...")
+    
+    def revoke_token_by_id(self, token_id: str):
+        """Revoke a token by its JWT ID."""
+        if token_id in self.active_tokens:
+            del self.active_tokens[token_id]
+            logger.warning(f"Token ID revoked: {token_id}")
+    
+    def revoke_user_tokens(self, user_id: int):
+        """Revoke all tokens for a specific user."""
+        user_tokens = [tid for tid, data in self.active_tokens.items() if data["user_id"] == user_id]
+        for token_id in user_tokens:
+            self.revoke_token_by_id(token_id)
+        logger.warning(f"All tokens revoked for user {user_id}")
     
     def is_token_revoked(self, token: str) -> bool:
         """Check if token is revoked."""
         return token in self.revoked_tokens
     
+    def update_token_usage(self, token_id: str):
+        """Update token usage statistics."""
+        if token_id in self.active_tokens:
+            self.active_tokens[token_id]["last_used"] = time.time()
+            self.active_tokens[token_id]["access_count"] += 1
+    
+    def get_security_stats(self) -> Dict[str, Any]:
+        """Get security statistics for monitoring."""
+        return {
+            "active_tokens": len(self.active_tokens),
+            "revoked_tokens": len(self.revoked_tokens),
+            "users_with_tokens": len(set(data["user_id"] for data in self.active_tokens.values())),
+            "cleanup_due": time.time() - self.last_cleanup > self.token_blacklist_cleanup_interval
+        }
+    
     def cleanup_expired_tokens(self):
-        """Remove expired tokens from blacklist."""
+        """Remove expired tokens from tracking."""
         current_time = time.time()
         if current_time - self.last_cleanup < self.token_blacklist_cleanup_interval:
             return
         
-        # In a real implementation, you'd decode tokens and check expiration
-        # For now, we'll just clear very old entries periodically
+        # Remove expired active tokens (older than 24 hours)
+        expired_threshold = current_time - 86400  # 24 hours
+        expired_tokens = [
+            tid for tid, data in self.active_tokens.items() 
+            if data["issued_at"].timestamp() < expired_threshold
+        ]
+        
+        for token_id in expired_tokens:
+            del self.active_tokens[token_id]
+        
+        # Clear old revoked tokens periodically
         if len(self.revoked_tokens) > 10000:
             self.revoked_tokens.clear()
             logger.info("Cleared token blacklist")
         
+        if expired_tokens:
+            logger.info(f"Cleaned up {len(expired_tokens)} expired tokens")
+        
         self.last_cleanup = current_time
+
+class SessionManager:
+    """Enhanced session management with security features."""
+    
+    def __init__(self, jwt_security: JWTSecurity):
+        self.jwt_security = jwt_security
+        self.session_fingerprints = {}  # {session_id: fingerprint}
+        self.session_ips = {}  # {session_id: [ip_addresses]}
+        self.session_locations = {}  # {session_id: geolocation_info}
+        self.suspicious_sessions = set()  # Track suspicious session IDs
+        self.max_ip_changes = 3  # Max IP changes before flagging as suspicious
+        self.session_timeout = 1800  # 30 minutes inactivity timeout
+        self.max_concurrent_sessions = 5  # Max concurrent sessions per user
+        
+        # Security thresholds
+        self.max_failed_attempts = 5
+        self.failed_attempts = {}  # {session_id: count}
+        self.account_lockout_duration = 900  # 15 minutes
+        self.locked_accounts = {}  # {user_id: lockout_until}
+        
+    def create_session_fingerprint(self, request) -> str:
+        """Create unique fingerprint for session validation."""
+        user_agent = request.headers.get("user-agent", "")
+        accept_language = request.headers.get("accept-language", "")
+        accept_encoding = request.headers.get("accept-encoding", "")
+        
+        fingerprint_data = f"{user_agent}:{accept_language}:{accept_encoding}"
+        return hashlib.sha256(fingerprint_data.encode()).hexdigest()[:16]
+    
+    def register_session(self, session_id: str, user_id: int, request, ip_address: str):
+        """Register a new session with security tracking."""
+        fingerprint = self.create_session_fingerprint(request)
+        
+        # Store session security data
+        self.session_fingerprints[session_id] = fingerprint
+        self.session_ips[session_id] = [ip_address]
+        
+        # Track user session count
+        user_sessions = [sid for sid, uid in self.jwt_security.active_tokens.items() 
+                        if self.jwt_security.active_tokens.get(sid, {}).get("user_id") == user_id]
+        
+        if len(user_sessions) > self.max_concurrent_sessions:
+            # Revoke oldest session
+            oldest_session = min(user_sessions, 
+                               key=lambda s: self.jwt_security.active_tokens.get(s, {}).get("issued_at", 0))
+            self.revoke_session(oldest_session)
+            
+        logger.info(f"Session registered: {session_id[:8]}... for user {user_id}")
+        
+    def validate_session(self, session_id: str, request, ip_address: str) -> Dict[str, Any]:
+        """Validate session security and detect suspicious activity."""
+        validation_result = {
+            "is_valid": True,
+            "warnings": [],
+            "threats_detected": [],
+            "risk_score": 0
+        }
+        
+        # Check if session exists
+        if session_id not in self.session_fingerprints:
+            validation_result["is_valid"] = False
+            validation_result["threats_detected"].append("unknown_session")
+            validation_result["risk_score"] += 50
+            return validation_result
+        
+        # Validate fingerprint
+        current_fingerprint = self.create_session_fingerprint(request)
+        stored_fingerprint = self.session_fingerprints[session_id]
+        
+        if current_fingerprint != stored_fingerprint:
+            validation_result["warnings"].append("fingerprint_mismatch")
+            validation_result["risk_score"] += 30
+            logger.warning(f"Session fingerprint mismatch for {session_id[:8]}...")
+        
+        # Validate IP address changes
+        if session_id in self.session_ips:
+            session_ip_list = self.session_ips[session_id]
+            
+            if ip_address not in session_ip_list:
+                session_ip_list.append(ip_address)
+                validation_result["warnings"].append("ip_address_change")
+                validation_result["risk_score"] += 20
+                
+                # Check for excessive IP changes
+                if len(session_ip_list) > self.max_ip_changes:
+                    validation_result["threats_detected"].append("excessive_ip_changes")
+                    validation_result["risk_score"] += 40
+                    self.suspicious_sessions.add(session_id)
+                    logger.warning(f"Excessive IP changes for session {session_id[:8]}...")
+        
+        # Check for suspicious session
+        if session_id in self.suspicious_sessions:
+            validation_result["warnings"].append("flagged_as_suspicious")
+            validation_result["risk_score"] += 25
+        
+        # Evaluate overall risk
+        if validation_result["risk_score"] > 70:
+            validation_result["is_valid"] = False
+            validation_result["threats_detected"].append("high_risk_session")
+        
+        return validation_result
+    
+    def track_failed_attempt(self, session_id: str, user_id: int):
+        """Track failed authentication attempts."""
+        if session_id not in self.failed_attempts:
+            self.failed_attempts[session_id] = 0
+        
+        self.failed_attempts[session_id] += 1
+        
+        if self.failed_attempts[session_id] >= self.max_failed_attempts:
+            # Lock account
+            self.locked_accounts[user_id] = time.time() + self.account_lockout_duration
+            logger.warning(f"Account {user_id} locked due to excessive failed attempts")
+            
+            # Revoke all user sessions
+            self.jwt_security.revoke_user_tokens(user_id)
+    
+    def is_account_locked(self, user_id: int) -> bool:
+        """Check if account is currently locked."""
+        if user_id in self.locked_accounts:
+            if time.time() < self.locked_accounts[user_id]:
+                return True
+            else:
+                # Unlock account
+                del self.locked_accounts[user_id]
+                return False
+        return False
+    
+    def revoke_session(self, session_id: str):
+        """Revoke session and clean up tracking data."""
+        # Remove from JWT tracking
+        self.jwt_security.revoke_token_by_id(session_id)
+        
+        # Clean up session tracking data
+        self.session_fingerprints.pop(session_id, None)
+        self.session_ips.pop(session_id, None)
+        self.session_locations.pop(session_id, None)
+        self.failed_attempts.pop(session_id, None)
+        self.suspicious_sessions.discard(session_id)
+        
+        logger.info(f"Session revoked and cleaned up: {session_id[:8]}...")
+    
+    def revoke_user_sessions(self, user_id: int):
+        """Revoke all sessions for a user."""
+        # Get user sessions
+        user_sessions = [sid for sid in self.session_fingerprints.keys()
+                        if self.jwt_security.active_tokens.get(sid, {}).get("user_id") == user_id]
+        
+        for session_id in user_sessions:
+            self.revoke_session(session_id)
+        
+        logger.warning(f"All sessions revoked for user {user_id}")
+    
+    def detect_concurrent_session_anomaly(self, user_id: int) -> Dict[str, Any]:
+        """Detect suspicious concurrent session patterns."""
+        user_sessions = [sid for sid, data in self.jwt_security.active_tokens.items() 
+                        if data.get("user_id") == user_id]
+        
+        anomaly_detected = {
+            "concurrent_sessions": len(user_sessions),
+            "suspicious_patterns": [],
+            "risk_level": "low"
+        }
+        
+        if len(user_sessions) > self.max_concurrent_sessions:
+            anomaly_detected["suspicious_patterns"].append("excessive_concurrent_sessions")
+            anomaly_detected["risk_level"] = "high"
+        
+        # Check for sessions from different geographic locations
+        session_ips = []
+        for session_id in user_sessions:
+            if session_id in self.session_ips:
+                session_ips.extend(self.session_ips[session_id])
+        
+        # Simple heuristic for geographic dispersion (in production, use proper geolocation)
+        unique_ip_prefixes = set([ip.split('.')[0] + '.' + ip.split('.')[1] for ip in session_ips if '.' in ip])
+        
+        if len(unique_ip_prefixes) > 2:
+            anomaly_detected["suspicious_patterns"].append("geographically_dispersed_sessions")
+            anomaly_detected["risk_level"] = "medium"
+        
+        return anomaly_detected
+    
+    def cleanup_expired_sessions(self):
+        """Clean up expired and inactive sessions."""
+        current_time = time.time()
+        expired_sessions = []
+        
+        # Find inactive sessions
+        for session_id, token_data in self.jwt_security.active_tokens.items():
+            last_used = token_data.get("last_used", 0)
+            if isinstance(last_used, (int, float)) and current_time - last_used > self.session_timeout:
+                expired_sessions.append(session_id)
+        
+        # Clean up expired sessions
+        for session_id in expired_sessions:
+            self.revoke_session(session_id)
+        
+        # Clean up old account locks
+        expired_locks = [user_id for user_id, until in self.locked_accounts.items() if current_time > until]
+        for user_id in expired_locks:
+            del self.locked_accounts[user_id]
+        
+        if expired_sessions:
+            logger.info(f"Cleaned up {len(expired_sessions)} expired sessions")
+        
+        if expired_locks:
+            logger.info(f"Unlocked {len(expired_locks)} accounts")
+    
+    def get_session_security_stats(self) -> Dict[str, Any]:
+        """Get session security statistics."""
+        return {
+            "total_sessions": len(self.session_fingerprints),
+            "suspicious_sessions": len(self.suspicious_sessions),
+            "locked_accounts": len(self.locked_accounts),
+            "sessions_with_ip_changes": len([s for s in self.session_ips.values() if len(s) > 1]),
+            "high_risk_sessions": len([s for s in self.suspicious_sessions]),
+            "average_ips_per_session": sum(len(ips) for ips in self.session_ips.values()) / max(len(self.session_ips), 1)
+        }
 
 class SecurityAudit:
     """Security auditing and monitoring."""

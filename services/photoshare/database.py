@@ -10,7 +10,7 @@ import os
 import asyncio
 from datetime import datetime, timezone
 from typing import AsyncGenerator, Optional
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, LargeBinary, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, LargeBinary, ForeignKey, UniqueConstraint
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -28,6 +28,94 @@ DATABASE_URL = os.getenv(
 Base = declarative_base()
 
 # Database Models
+
+# Role-Based Access Control Models
+class Role(Base):
+    __tablename__ = "roles"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(50), unique=True, nullable=False, index=True)
+    description = Column(String(255), nullable=True)
+    is_active = Column(Boolean, default=True, index=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None
+        }
+
+class Permission(Base):
+    __tablename__ = "permissions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), unique=True, nullable=False, index=True)
+    resource = Column(String(50), nullable=False, index=True)  # e.g., 'photos', 'users', 'admin'
+    action = Column(String(50), nullable=False, index=True)    # e.g., 'read', 'write', 'delete'
+    description = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    
+    __table_args__ = (UniqueConstraint('resource', 'action', name='_resource_action_uc'),)
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "resource": self.resource,
+            "action": self.action,
+            "description": self.description,
+            "created_at": self.created_at.isoformat() if self.created_at else None
+        }
+
+class RolePermission(Base):
+    __tablename__ = "role_permissions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    role_id = Column(Integer, ForeignKey("roles.id", ondelete="CASCADE"), nullable=False, index=True)
+    permission_id = Column(Integer, ForeignKey("permissions.id", ondelete="CASCADE"), nullable=False, index=True)
+    granted_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    granted_by = Column(Integer, ForeignKey("users.id"), nullable=True)  # Who granted this permission
+    
+    __table_args__ = (UniqueConstraint('role_id', 'permission_id', name='_role_permission_uc'),)
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "role_id": self.role_id,
+            "permission_id": self.permission_id,
+            "granted_at": self.granted_at.isoformat() if self.granted_at else None,
+            "granted_by": self.granted_by
+        }
+
+class UserRole(Base):
+    __tablename__ = "user_roles"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    role_id = Column(Integer, ForeignKey("roles.id", ondelete="CASCADE"), nullable=False, index=True)
+    assigned_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    assigned_by = Column(Integer, ForeignKey("users.id"), nullable=True)  # Who assigned this role
+    expires_at = Column(DateTime(timezone=True), nullable=True, index=True)  # Optional expiration
+    is_active = Column(Boolean, default=True, index=True)
+    
+    __table_args__ = (UniqueConstraint('user_id', 'role_id', name='_user_role_uc'),)
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "role_id": self.role_id,
+            "assigned_at": self.assigned_at.isoformat() if self.assigned_at else None,
+            "assigned_by": self.assigned_by,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "is_active": self.is_active
+        }
+
 class User(Base):
     __tablename__ = "users"
     
@@ -267,6 +355,12 @@ class DatabaseManager:
         except Exception as e:
             return {"healthy": False, "error": str(e)}
 
+# Import enhanced models to ensure they're registered with Base
+from models_enhanced import (
+    PhotoMetadata, PhotoTag, PhotoLike, PhotoComment, UserFollow, 
+    UserProfile, Album, AlbumPhoto, Notification, PhotoShare
+)
+
 # Global database manager instance
 db_manager = DatabaseManager()
 
@@ -427,5 +521,197 @@ class EmailVerificationRepository:
         now = datetime.now(timezone.utc)
         await self.session.execute(
             delete(EmailVerification).where(EmailVerification.expires_at < now)
+        )
+        await self.session.commit()
+
+class RoleRepository:
+    def __init__(self, session: AsyncSession):
+        self.session = session
+    
+    async def create_role(self, name: str, description: str = None) -> Role:
+        """Create a new role."""
+        role = Role(name=name, description=description)
+        self.session.add(role)
+        await self.session.commit()
+        await self.session.refresh(role)
+        return role
+    
+    async def get_role_by_name(self, name: str) -> Optional[Role]:
+        """Get role by name."""
+        from sqlalchemy import select
+        result = await self.session.execute(select(Role).where(Role.name == name, Role.is_active == True))
+        return result.scalar_one_or_none()
+    
+    async def get_role_by_id(self, role_id: int) -> Optional[Role]:
+        """Get role by ID."""
+        from sqlalchemy import select
+        result = await self.session.execute(select(Role).where(Role.id == role_id, Role.is_active == True))
+        return result.scalar_one_or_none()
+    
+    async def get_all_roles(self) -> list[Role]:
+        """Get all active roles."""
+        from sqlalchemy import select
+        result = await self.session.execute(select(Role).where(Role.is_active == True))
+        return result.scalars().all()
+
+class PermissionRepository:
+    def __init__(self, session: AsyncSession):
+        self.session = session
+    
+    async def create_permission(self, name: str, resource: str, action: str, description: str = None) -> Permission:
+        """Create a new permission."""
+        permission = Permission(name=name, resource=resource, action=action, description=description)
+        self.session.add(permission)
+        await self.session.commit()
+        await self.session.refresh(permission)
+        return permission
+    
+    async def get_permission_by_name(self, name: str) -> Optional[Permission]:
+        """Get permission by name."""
+        from sqlalchemy import select
+        result = await self.session.execute(select(Permission).where(Permission.name == name))
+        return result.scalar_one_or_none()
+    
+    async def get_permission_by_resource_action(self, resource: str, action: str) -> Optional[Permission]:
+        """Get permission by resource and action."""
+        from sqlalchemy import select
+        result = await self.session.execute(
+            select(Permission).where(Permission.resource == resource, Permission.action == action)
+        )
+        return result.scalar_one_or_none()
+    
+    async def get_all_permissions(self) -> list[Permission]:
+        """Get all permissions."""
+        from sqlalchemy import select
+        result = await self.session.execute(select(Permission))
+        return result.scalars().all()
+
+class RolePermissionRepository:
+    def __init__(self, session: AsyncSession):
+        self.session = session
+    
+    async def grant_permission_to_role(self, role_id: int, permission_id: int, granted_by: int = None) -> RolePermission:
+        """Grant a permission to a role."""
+        role_permission = RolePermission(
+            role_id=role_id, 
+            permission_id=permission_id, 
+            granted_by=granted_by
+        )
+        self.session.add(role_permission)
+        await self.session.commit()
+        await self.session.refresh(role_permission)
+        return role_permission
+    
+    async def revoke_permission_from_role(self, role_id: int, permission_id: int):
+        """Revoke a permission from a role."""
+        from sqlalchemy import delete
+        await self.session.execute(
+            delete(RolePermission).where(
+                RolePermission.role_id == role_id, 
+                RolePermission.permission_id == permission_id
+            )
+        )
+        await self.session.commit()
+    
+    async def get_role_permissions(self, role_id: int) -> list[Permission]:
+        """Get all permissions for a role."""
+        from sqlalchemy import select, join
+        result = await self.session.execute(
+            select(Permission).select_from(
+                join(Permission, RolePermission, Permission.id == RolePermission.permission_id)
+            ).where(RolePermission.role_id == role_id)
+        )
+        return result.scalars().all()
+
+class UserRoleRepository:
+    def __init__(self, session: AsyncSession):
+        self.session = session
+    
+    async def assign_role_to_user(self, user_id: int, role_id: int, assigned_by: int = None, expires_at: datetime = None) -> UserRole:
+        """Assign a role to a user."""
+        user_role = UserRole(
+            user_id=user_id, 
+            role_id=role_id, 
+            assigned_by=assigned_by,
+            expires_at=expires_at
+        )
+        self.session.add(user_role)
+        await self.session.commit()
+        await self.session.refresh(user_role)
+        return user_role
+    
+    async def revoke_role_from_user(self, user_id: int, role_id: int):
+        """Revoke a role from a user."""
+        from sqlalchemy import update
+        await self.session.execute(
+            update(UserRole).where(
+                UserRole.user_id == user_id,
+                UserRole.role_id == role_id
+            ).values(is_active=False)
+        )
+        await self.session.commit()
+    
+    async def get_user_roles(self, user_id: int) -> list[Role]:
+        """Get all active roles for a user."""
+        from sqlalchemy import select, join
+        now = datetime.now(timezone.utc)
+        result = await self.session.execute(
+            select(Role).select_from(
+                join(Role, UserRole, Role.id == UserRole.role_id)
+            ).where(
+                UserRole.user_id == user_id,
+                UserRole.is_active == True,
+                (UserRole.expires_at.is_(None) | (UserRole.expires_at > now))
+            )
+        )
+        return result.scalars().all()
+    
+    async def get_user_permissions(self, user_id: int) -> list[Permission]:
+        """Get all permissions for a user through their roles."""
+        from sqlalchemy import select, join
+        now = datetime.now(timezone.utc)
+        result = await self.session.execute(
+            select(Permission).select_from(
+                join(Permission, RolePermission, Permission.id == RolePermission.permission_id)
+                .join(Role, Role.id == RolePermission.role_id)
+                .join(UserRole, UserRole.role_id == Role.id)
+            ).where(
+                UserRole.user_id == user_id,
+                UserRole.is_active == True,
+                Role.is_active == True,
+                (UserRole.expires_at.is_(None) | (UserRole.expires_at > now))
+            )
+        )
+        return result.scalars().all()
+    
+    async def has_permission(self, user_id: int, resource: str, action: str) -> bool:
+        """Check if user has specific permission."""
+        from sqlalchemy import select, join
+        now = datetime.now(timezone.utc)
+        result = await self.session.execute(
+            select(Permission).select_from(
+                join(Permission, RolePermission, Permission.id == RolePermission.permission_id)
+                .join(Role, Role.id == RolePermission.role_id)
+                .join(UserRole, UserRole.role_id == Role.id)
+            ).where(
+                UserRole.user_id == user_id,
+                UserRole.is_active == True,
+                Role.is_active == True,
+                Permission.resource == resource,
+                Permission.action == action,
+                (UserRole.expires_at.is_(None) | (UserRole.expires_at > now))
+            ).limit(1)
+        )
+        return result.scalar_one_or_none() is not None
+    
+    async def cleanup_expired_roles(self):
+        """Remove expired user role assignments."""
+        from sqlalchemy import update
+        now = datetime.now(timezone.utc)
+        await self.session.execute(
+            update(UserRole).where(
+                UserRole.expires_at < now,
+                UserRole.is_active == True
+            ).values(is_active=False)
         )
         await self.session.commit()
