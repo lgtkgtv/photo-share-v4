@@ -1,34 +1,27 @@
+#!/usr/bin/env python3
 """
-Test configuration and fixtures for the photo sharing service.
+Test configuration and fixtures for the separated architecture.
 """
-import asyncio
 import os
-import sys
-import tempfile
-from typing import AsyncGenerator, Dict, Any
-from unittest.mock import Mock
-
 import pytest
-import pytest_asyncio
-from fastapi.testclient import TestClient
-from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy.pool import StaticPool
+import asyncio
+from typing import AsyncGenerator
+from unittest.mock import Mock, AsyncMock, patch
 
-# Set test environment variables first
+# Set test environment variables
 os.environ["ENVIRONMENT"] = "test"
-os.environ["JWT_SECRET_KEY"] = "production_grade_jwt_key_for_testing_only_2025_secure_abcdef123456"
-os.environ["DB_HOST"] = "localhost"
-os.environ["DB_PORT"] = "5432"
-os.environ["POSTGRES_USER"] = "test_user"
-os.environ["POSTGRES_PASSWORD"] = "test_password"
-os.environ["POSTGRES_DB"] = "test_db"
-
-# Import after setting environment - adjust paths for proper service location
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'services', 'photoshare'))
-from main_database import PhotoShareDatabaseService
-from database import Base, User, Photo, Session as DBSession, get_db
-
+os.environ["JWT_SECRET_KEY"] = "test-secret-key-for-testing-only"
+os.environ["AUTH_DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
+os.environ["APP_DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
+os.environ["TWOFA_ENCRYPTION_KEY"] = "4SimbvVNZ3lFGeJLcn1y0pBOCXgVrwmaMGHY1VvyxMs="
+os.environ["SMS_PROVIDER_API_KEY"] = "test_sms_key"
+os.environ["SMS_FROM_NUMBER"] = "+1234567890"
+os.environ["WEBAUTHN_RP_ID"] = "localhost"
+os.environ["WEBAUTHN_RP_NAME"] = "PhotoShare Test"
+os.environ["GOOGLE_CLIENT_ID"] = "test_google_id"
+os.environ["GOOGLE_CLIENT_SECRET"] = "test_google_secret"
+os.environ["STORAGE_PATH"] = "/tmp/test_storage"
+os.environ["MAX_FILE_SIZE"] = "10485760"
 
 @pytest.fixture(scope="session")
 def event_loop():
@@ -37,246 +30,132 @@ def event_loop():
     yield loop
     loop.close()
 
-
-@pytest_asyncio.fixture(scope="function")
-async def test_db_engine():
-    """Create test database engine with in-memory SQLite."""
-    engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
-        echo=False,
-        poolclass=StaticPool,
-        connect_args={"check_same_thread": False}
-    )
+@pytest.fixture
+def mock_auth_db_manager():
+    """Mock authentication database manager."""
+    manager = Mock()
+    manager.initialize = AsyncMock(return_value=True)
+    manager.health_check = AsyncMock(return_value=True)
+    manager.close = AsyncMock()
     
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    
-    yield engine
-    
-    await engine.dispose()
-
-
-@pytest_asyncio.fixture
-async def test_db_session(test_db_engine) -> AsyncGenerator[AsyncSession, None]:
-    """Create test database session."""
-    async_session = async_sessionmaker(
-        test_db_engine, class_=AsyncSession, expire_on_commit=False
-    )
-    
-    async with async_session() as session:
+    async def mock_get_session():
+        session = AsyncMock()
+        session.__aenter__ = AsyncMock(return_value=session)
+        session.__aexit__ = AsyncMock(return_value=None)
         yield session
+    
+    manager.get_session = mock_get_session
+    return manager
 
+@pytest.fixture
+def mock_app_db_manager():
+    """Mock application database manager."""
+    manager = Mock()
+    manager.initialize = AsyncMock(return_value=True)
+    manager.health_check = AsyncMock(return_value=True)
+    manager.close = AsyncMock()
+    
+    async def mock_get_session():
+        session = AsyncMock()
+        session.__aenter__ = AsyncMock(return_value=session)
+        session.__aexit__ = AsyncMock(return_value=None)
+        yield session
+    
+    manager.get_session = mock_get_session
+    return manager
+
+@pytest.fixture
+def mock_auth_client():
+    """Mock authentication service client."""
+    client = Mock()
+    client.verify_jwt_token = AsyncMock(return_value={"sub": "test-user-uuid", "user_id": 1})
+    client.get_user_info = AsyncMock(return_value={
+        "uuid": "test-user-uuid",
+        "id": 1,
+        "email": "test@example.com",
+        "first_name": "Test",
+        "last_name": "User",
+        "is_verified": True,
+        "is_active": True
+    })
+    client.get_user_permissions = AsyncMock(return_value=["photos:read", "photos:write"])
+    client.health_check = AsyncMock(return_value={"status": "healthy"})
+    return client
+
+@pytest.fixture
+def mock_sso_manager():
+    """Mock SSO provider manager."""
+    manager = Mock()
+    manager.initialize = AsyncMock()
+    manager.get_provider_list = AsyncMock(return_value=[
+        {"name": "google", "display_name": "Google", "provider": "google"}
+    ])
+    manager.get_authorization_url = AsyncMock(return_value="https://example.com/auth")
+    manager.health_check = AsyncMock(return_value={"status": "healthy"})
+    return manager
+
+@pytest.fixture
+def mock_twofa_manager():
+    """Mock two-factor authentication manager."""
+    manager = Mock()
+    manager.setup_totp = AsyncMock(return_value={
+        "device_id": "test-device",
+        "secret": "test-secret",
+        "qr_code": "data:image/png;base64,test",
+        "backup_codes": ["12345678"]
+    })
+    manager.verify_totp = AsyncMock(return_value=True)
+    manager.is_2fa_enabled_for_user = AsyncMock(return_value=False)
+    manager.health_check = AsyncMock(return_value={"status": "healthy"})
+    return manager
 
 @pytest.fixture
 def mock_file_storage():
     """Mock file storage service."""
-    mock_storage = Mock()
-    mock_storage.store_file.return_value = {
-        "storage_path": "/tmp/test_photo.jpg",
+    storage = Mock()
+    storage.store_file = Mock(return_value={
+        "storage_path": "/tmp/test_file.jpg",
         "file_size": 1024,
         "content_type": "image/jpeg"
-    }
-    mock_storage.retrieve_file.return_value = b"fake_image_data"
-    mock_storage.delete_file.return_value = True
-    mock_storage.health_check.return_value = {
-        "local_storage": True,
-        "platform_storage": True
-    }
-    mock_storage.get_file_url.return_value = "http://localhost/files/test_photo.jpg"
-    return mock_storage
+    })
+    storage.retrieve_file = Mock(return_value=b"fake_file_data")
+    storage.delete_file = Mock(return_value=True)
+    storage.health_check = Mock(return_value={"local_storage": True})
+    return storage
 
+@pytest.fixture
+def sample_image_data():
+    """Sample image file data for testing."""
+    # Minimal valid JPEG
+    header = b'\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00'
+    padding = b'\x00' * (100 - len(header) - 2)
+    footer = b'\xff\xd9'
+    return header + padding + footer
 
 @pytest.fixture
 def test_user_data():
     """Test user data."""
     return {
+        "uuid": "test-user-uuid",
+        "id": 1,
         "email": "test@example.com",
-        "password": "TestPassword123!",
+        "first_name": "Test",
+        "last_name": "User",
         "is_verified": True,
         "is_active": True
     }
-
 
 @pytest.fixture
 def test_photo_data():
     """Test photo data."""
     return {
+        "id": 1,
+        "user_uuid": "test-user-uuid",
         "filename": "test_photo.jpg",
         "original_filename": "my_photo.jpg",
         "content_type": "image/jpeg",
         "file_size": 1024,
-        "storage_path": "/tmp/test_photo.jpg",
         "title": "Test Photo",
         "description": "A test photo",
         "is_public": True
     }
-
-
-@pytest_asyncio.fixture
-async def test_user(test_db_session: AsyncSession, test_user_data: Dict[str, Any]) -> User:
-    """Create test user in database."""
-    from passlib.context import CryptContext
-    
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-    hashed_password = pwd_context.hash(test_user_data["password"])
-    
-    user = User(
-        email=test_user_data["email"],
-        password_hash=hashed_password,
-        is_verified=test_user_data["is_verified"],
-        is_active=test_user_data["is_active"]
-    )
-    
-    test_db_session.add(user)
-    await test_db_session.commit()
-    await test_db_session.refresh(user)
-    
-    return user
-
-
-@pytest_asyncio.fixture
-async def test_photo(test_db_session: AsyncSession, test_user: User, test_photo_data: Dict[str, Any]) -> Photo:
-    """Create test photo in database."""
-    photo = Photo(
-        user_id=test_user.id,
-        **test_photo_data
-    )
-    
-    test_db_session.add(photo)
-    await test_db_session.commit()
-    await test_db_session.refresh(photo)
-    
-    return photo
-
-
-@pytest.fixture(scope="function") 
-def test_app():
-    """Create FastAPI app for testing."""
-    # Import FastAPI directly and create a minimal app for testing
-    from fastapi import FastAPI
-    from unittest.mock import Mock
-    
-    # Create a minimal test app instead of the full service
-    app = FastAPI(title="Test App")
-    
-    # Add a simple test endpoint
-    @app.get("/health")
-    async def health():
-        return {"status": "ok"}
-    
-    # Add the registration endpoint that the test is looking for
-    @app.post("/api/users/register")
-    async def register_user(user_data: dict):
-        # Mock response for testing
-        return {
-            "id": 1,
-            "email": user_data.get("email", "test@example.com"),
-            "is_verified": False,
-            "is_active": True
-        }
-    
-    return app
-
-
-@pytest.fixture
-def test_client(test_app):
-    """Create test client."""
-    return TestClient(test_app)
-
-
-@pytest_asyncio.fixture
-async def async_test_client(test_app):
-    """Create async test client."""
-    async with AsyncClient(
-        app=test_app, 
-        base_url="http://testserver"
-    ) as client:
-        yield client
-
-
-@pytest.fixture
-def test_user_api(test_client: TestClient, test_user_data: Dict[str, Any]) -> User:
-    """Create test user via API for sync tests."""
-    # Register the user first
-    response = test_client.post("/api/users/register", json={
-        "email": test_user_data["email"],
-        "password": test_user_data["password"]
-    })
-    
-    if response.status_code == 200:
-        user_data = response.json()
-        # Create a mock user object with the returned data
-        user = Mock()
-        user.id = user_data["id"] 
-        user.email = user_data["email"]
-        user.is_verified = user_data.get("is_verified", True)
-        user.is_active = user_data.get("is_active", True)
-        return user
-    else:
-        # Return a mock user for testing
-        mock_user = Mock()
-        mock_user.id = 1
-        mock_user.email = test_user_data["email"]
-        mock_user.is_verified = True
-        mock_user.is_active = True
-        return mock_user
-
-
-@pytest.fixture
-def auth_headers(test_user: User):
-    """Create authentication headers for test user."""
-    from jose import jwt
-    from datetime import datetime, timedelta
-    
-    token_data = {
-        "sub": str(test_user.id),
-        "email": test_user.email,
-        "iat": datetime.utcnow(),
-        "exp": datetime.utcnow() + timedelta(minutes=30)
-    }
-    
-    token = jwt.encode(token_data, os.environ["JWT_SECRET_KEY"], algorithm="HS256")
-    return {"Authorization": f"Bearer {token}"}
-
-
-@pytest.fixture
-def sample_image_data():
-    """Sample image file data for testing."""
-    # Minimal valid JPEG header
-    return b'\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00\xff\xd9'
-
-
-@pytest.fixture
-def temp_file():
-    """Create temporary file for testing."""
-    with tempfile.NamedTemporaryFile(delete=False) as f:
-        yield f.name
-    
-    # Cleanup
-    try:
-        os.unlink(f.name)
-    except FileNotFoundError:
-        pass
-
-
-@pytest.fixture(autouse=True)
-def clear_prometheus_registry():
-    """Clear Prometheus registry before and after each test to avoid conflicts."""
-    from prometheus_client import REGISTRY
-    # Clear existing metrics before test
-    collectors = list(REGISTRY._collector_to_names.keys())
-    for collector in collectors:
-        try:
-            REGISTRY.unregister(collector)
-        except KeyError:
-            pass  # Already unregistered
-    
-    yield
-    
-    # Clear metrics after test
-    collectors = list(REGISTRY._collector_to_names.keys())
-    for collector in collectors:
-        try:
-            REGISTRY.unregister(collector)
-        except KeyError:
-            pass  # Already unregistered

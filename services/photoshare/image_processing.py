@@ -15,10 +15,9 @@ import io
 import os
 import logging
 import hashlib
-from typing import Dict, Any, List, Tuple, Optional, Union
+from typing import Dict, Any, Tuple, Optional
 from datetime import datetime
-from pathlib import Path
-from PIL import Image, ImageOps, ImageFilter, ImageDraw, ImageFont, ExifTags
+from PIL import Image, ImageOps, ImageFilter, ImageDraw, ImageFont
 from PIL.ExifTags import TAGS
 import pillow_heif
 

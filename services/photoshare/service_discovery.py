@@ -9,7 +9,6 @@ Provides service discovery capabilities using Consul and local service registry.
 import os
 import aiohttp
 import asyncio
-import json
 import logging
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timezone
@@ -324,7 +323,7 @@ class ServiceDiscovery:
                     url = f"{self.consul_url}/v1/status/leader"
                     async with session.get(url) as response:
                         consul_healthy = response.status == 200
-            except:
+            except Exception:
                 consul_healthy = False
             
             service_health = await self.health_check_services()

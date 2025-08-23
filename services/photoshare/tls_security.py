@@ -10,16 +10,11 @@ for enhanced transport layer security in the PhotoShare application.
 import ssl
 import socket
 import logging
-import os
-import subprocess
-from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime, timezone, timedelta
+from typing import Dict, Any, List, Tuple
+from datetime import datetime, timezone
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa, padding
 import requests
-from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -276,7 +271,7 @@ class TLSSecurityValidator:
                 context.maximum_version = version_const
                 
                 with socket.create_connection((hostname, port), timeout=5) as sock:
-                    with context.wrap_socket(sock, server_hostname=hostname) as ssock:
+                    with context.wrap_socket(sock, server_hostname=hostname):
                         protocol_info["supported_versions"].append(version_name)
                         
             except (ssl.SSLError, OSError, socket.timeout):
@@ -390,7 +385,7 @@ class TLSSecurityValidator:
                     max_age = int(directive.split('=')[1])
                     return max_age >= self.hsts_max_age_minimum
             return False
-        except:
+        except Exception:
             return False
     
     def _check_compliance_standards(self, validation_result: Dict[str, Any]) -> Dict[str, Any]:
@@ -437,12 +432,18 @@ class TLSSecurityValidator:
             score += 5
         
         # Grade mapping
-        if score >= 95: return "A+"
-        elif score >= 90: return "A"
-        elif score >= 80: return "B"
-        elif score >= 70: return "C"
-        elif score >= 60: return "D"
-        else: return "F"
+        if score >= 95:
+            return "A+"
+        elif score >= 90:
+            return "A"
+        elif score >= 80:
+            return "B"
+        elif score >= 70:
+            return "C"
+        elif score >= 60:
+            return "D"
+        else:
+            return "F"
     
     def create_tls_security_report(self, endpoints: List[Tuple[str, int]]) -> Dict[str, Any]:
         """Create comprehensive TLS security report for multiple endpoints."""

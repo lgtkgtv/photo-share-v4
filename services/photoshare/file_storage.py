@@ -8,7 +8,6 @@ Handles file storage operations with the platform storage service.
 
 import os
 import aiohttp
-import asyncio
 import hashlib
 import logging
 from typing import Optional, Dict, Any
@@ -92,10 +91,8 @@ class FileStorageService:
         try:
             # For now, simulate platform storage upload
             # In a real implementation, this would POST to the storage service
-            upload_url = f"{self.storage_base_url}/upload"
             
             # Simulate storage by creating the file structure in the storage volume
-            platform_storage_path = f"/usr/share/nginx/html/storage/{storage_path}"
             
             # Since we can't directly write to the nginx container,
             # we'll create a local representation that would be synced
@@ -195,7 +192,7 @@ class FileStorageService:
                 async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
                     async with session.get(f"{self.storage_base_url}/health") as response:
                         platform_healthy = response.status == 200
-            except:
+            except Exception:
                 platform_healthy = False
             
             return {

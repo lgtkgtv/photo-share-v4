@@ -1,0 +1,259 @@
+# Docker Compose for Separated Architecture
+# PhotoShare with dedicated authentication service and database separation
+version: '3.8'
+
+services:
+  # =============================================================================
+  # AUTHENTICATION SERVICE & DATABASE
+  # =============================================================================
+  
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: photoshare-auth-service
+    ports:
+      - "8001:8000"  # Auth service on port 8001
+    environment:
+      - ENVIRONMENT=production
+    env_file:
+      - .env.auth-service
+    depends_on:
+      - auth-db
+    volumes:
+      - ./services/auth-service:/app
+    networks:
+      - auth-network
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+  
+  auth-db:
+    image: postgres:15-alpine
+    container_name: photoshare-auth-db
+    ports:
+      - "5433:5432"  # Auth DB on port 5433
+    environment:
+      - POSTGRES_USER=auth_user
+      - POSTGRES_PASSWORD=auth_secure_password
+      - POSTGRES_DB=photo_share_auth
+    volumes:
+      - auth_postgres_data:/var/lib/postgresql/data
+      - ./services/auth-service/init-auth-db.sql:/docker-entrypoint-initdb.d/init-auth-db.sql:ro
+    networks:
+      - auth-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth_user -d photo_share_auth"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================================================================
+  # APPLICATION SERVICE & DATABASE
+  # =============================================================================
+  
+  photo-share-app:
+    build:
+      context: ./services/photoshare
+      dockerfile: Dockerfile.separated
+    container_name: photoshare-app-service
+    ports:
+      - "8000:8000"  # Main app on port 8000
+    environment:
+      - ENVIRONMENT=production
+      - AUTH_SERVICE_URL=http://auth-service:8000
+    env_file:
+      - .env.application
+    depends_on:
+      - app-db
+      - auth-service
+    volumes:
+      - ./services/photoshare:/app
+      - photo_storage:/app/storage
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+  
+  app-db:
+    image: postgres:15-alpine
+    container_name: photoshare-app-db
+    ports:
+      - "5432:5432"  # App DB on port 5432 (default)
+    environment:
+      - POSTGRES_USER=app_user
+      - POSTGRES_PASSWORD=app_secure_password
+      - POSTGRES_DB=photo_share_app
+    volumes:
+      - app_postgres_data:/var/lib/postgresql/data
+      - ./services/photoshare/init-app-db.sql:/docker-entrypoint-initdb.d/init-app-db.sql:ro
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app_user -d photo_share_app"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================================================================
+  # REVERSE PROXY (Optional - for production routing)
+  # =============================================================================
+  
+  nginx-proxy:
+    image: nginx:alpine
+    container_name: photoshare-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - photo-share-app
+      - auth-service
+    networks:
+      - app-network
+      - auth-network
+    restart: unless-stopped
+    profiles:
+      - proxy  # Only start with: docker-compose --profile proxy up
+
+  # =============================================================================
+  # MONITORING & OBSERVABILITY (Optional)
+  # =============================================================================
+  
+  redis-cache:
+    image: redis:7-alpine
+    container_name: photoshare-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - auth-network
+      - app-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    profiles:
+      - monitoring
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: photoshare-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - app-network
+      - auth-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: photoshare-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    networks:
+      - app-network
+      - auth-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
+networks:
+  # Authentication network - isolated for security
+  auth-network:
+    driver: bridge
+    internal: false  # Allows external access for SSO callbacks
+    
+  # Application network - for app services
+  app-network:
+    driver: bridge
+    internal: false  # Allows external access for API
+
+# =============================================================================
+# VOLUMES
+# =============================================================================
+volumes:
+  # Separate database volumes for complete isolation
+  auth_postgres_data:
+    driver: local
+    
+  app_postgres_data:
+    driver: local
+    
+  # Application data volumes
+  photo_storage:
+    driver: local
+    
+  redis_data:
+    driver: local
+    
+  # Monitoring volumes
+  prometheus_data:
+    driver: local
+    
+  grafana_data:
+    driver: local
+
+# =============================================================================
+# USAGE EXAMPLES
+# =============================================================================
+#
+# Start core services (auth + app):
+#   docker-compose -f docker-compose.separated.yml up -d
+#
+# Start with monitoring:
+#   docker-compose -f docker-compose.separated.yml --profile monitoring up -d
+#
+# Start with reverse proxy:
+#   docker-compose -f docker-compose.separated.yml --profile proxy up -d
+#
+# Start everything:
+#   docker-compose -f docker-compose.separated.yml --profile monitoring --profile proxy up -d
+#
+# View logs:
+#   docker-compose -f docker-compose.separated.yml logs -f auth-service
+#   docker-compose -f docker-compose.separated.yml logs -f photo-share-app
+#
+# Scale services:
+#   docker-compose -f docker-compose.separated.yml up -d --scale photo-share-app=3
+#
+# Database maintenance:
+#   docker-compose -f docker-compose.separated.yml exec auth-db psql -U auth_user -d photo_share_auth
+#   docker-compose -f docker-compose.separated.yml exec app-db psql -U app_user -d photo_share_app
+#
+# =============================================================================

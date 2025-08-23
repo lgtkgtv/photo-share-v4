@@ -18,9 +18,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 from contextvars import ContextVar
-from fastapi import Request, Response
+from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import JSONResponse
 
 # Context variable for correlation ID
 correlation_id: ContextVar[str] = ContextVar('correlation_id', default='')

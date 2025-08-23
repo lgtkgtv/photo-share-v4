@@ -9,13 +9,12 @@ Provides comprehensive error handling, logging, and monitoring capabilities.
 import logging
 import traceback
 import sys
-from datetime import datetime, timezone
-from typing import Dict, Any, Optional, List
+from datetime import datetime, timezone, timedelta
+from typing import Dict, Any, List
 from fastapi import Request, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
-import asyncio
 
 class ErrorHandler:
     """Centralized error handling and logging with enhanced validation."""

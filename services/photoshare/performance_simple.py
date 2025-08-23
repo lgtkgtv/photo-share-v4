@@ -7,17 +7,15 @@ Performance features with in-memory caching, connection pooling,
 and async database operations optimization.
 """
 
-import asyncio
 import time
 import json
 import logging
 import os
-from typing import Dict, Any, Optional, List, Union, Callable
-from datetime import datetime, timezone, timedelta
+from typing import Dict, Any, Optional, List, Callable
+from datetime import datetime, timezone
 from functools import wraps
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.pool import QueuePool
-from sqlalchemy import select, func
+from sqlalchemy import select
 import hashlib
 
 logger = logging.getLogger(__name__)
@@ -362,7 +360,7 @@ class MemoryCacheManager:
         
         try:
             # Import here to avoid circular dependency
-            from database import User, Photo
+            from database import Photo
             from sqlalchemy import select, func
             
             logger.info("Starting cache warming...")
@@ -774,7 +772,7 @@ class OptimizedDatabaseOperations:
         from database import Photo
         result = await db.execute(
             select(Photo)
-            .where(Photo.is_public == True)
+            .where(Photo.is_public)
             .order_by(Photo.created_at.desc())
             .offset(skip)
             .limit(limit)
@@ -811,7 +809,6 @@ class OptimizedDatabaseOperations:
             return cached_stats
         
         # Query database with optimized single query
-        from database import User, Photo, Session
         from sqlalchemy import text
         
         # Single optimized query using CTEs for better performance
@@ -860,7 +857,6 @@ class OptimizedDatabaseOperations:
     async def get_photos_with_user_data(self, db: AsyncSession, photo_ids: List[int]):
         """Get photos with user data in a single optimized query."""
         from database import Photo, User
-        from sqlalchemy.orm import selectinload
         
         # Use join to get photos with user data in one query
         result = await db.execute(

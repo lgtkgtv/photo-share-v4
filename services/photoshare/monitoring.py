@@ -8,10 +8,10 @@ Prometheus metrics collection and monitoring dashboard integration.
 
 import time
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
 from datetime import datetime, timezone
-from fastapi import Request, Response
+from fastapi import Request
 from fastapi.responses import Response as FastAPIResponse
 
 logger = logging.getLogger(__name__)
@@ -205,7 +205,7 @@ class MonitoringMiddleware:
             
             return response
             
-        except Exception as e:
+        except Exception:
             # Record failed request
             duration = time.time() - start_time
             self.metrics.record_request(method, endpoint, 500, duration)
@@ -251,8 +251,8 @@ class MonitoringDashboard:
             cache_perf = performance_data.get("cache_performance", {})
             if cache_perf:
                 # Record cache operations
-                cache_hits = cache_perf.get("cache_hits", 0)
-                cache_misses = cache_perf.get("cache_misses", 0)
+                cache_perf.get("cache_hits", 0)
+                cache_perf.get("cache_misses", 0)
                 cache_size = cache_perf.get("memory_cache_size", 0)
                 
                 # Update infrastructure metrics

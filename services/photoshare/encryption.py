@@ -12,13 +12,12 @@ import hashlib
 import secrets
 import base64
 import logging
-from typing import Dict, Any, Optional, Tuple, List
+from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone, timedelta
 from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.backends import default_backend
 import bcrypt
 
@@ -227,7 +226,6 @@ class EncryptionManager:
     
     def rotate_encryption_key(self) -> str:
         """Rotate the master encryption key."""
-        old_key = self.master_key
         self.master_key = self._generate_master_key()
         
         # Regenerate Fernet key
@@ -468,7 +466,7 @@ class SecurityKeyManager:
     def _create_key_escrow(self, key_id: str, key_material: str):
         """Create encrypted backup of key for recovery."""
         # In production, this would use secure key escrow system
-        escrow_key = self.encryption.generate_secure_token(32)
+        self.encryption.generate_secure_token(32)
         escrow_id = f"escrow_{secrets.token_hex(8)}"
         
         # Encrypt key with escrow key
