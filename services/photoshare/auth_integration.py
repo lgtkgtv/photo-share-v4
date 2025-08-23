@@ -17,6 +17,13 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from functools import wraps
 import time
 
+# Import enhanced JWT security
+try:
+    from jwt_security import jwt_secret_manager, validate_jwt_token, generate_secure_jwt
+    JWT_SECURITY_ENHANCED = True
+except ImportError:
+    JWT_SECURITY_ENHANCED = False
+
 logger = logging.getLogger(__name__)
 
 class AuthServiceClient:
@@ -43,10 +50,19 @@ class AuthServiceClient:
         self._cache_ttl = 300  # 5 minutes
         
     async def verify_jwt_token(self, token: str) -> Dict[str, Any]:
-        """Verify JWT token using shared secret key."""
+        """Verify JWT token using enhanced security or fallback to shared secret."""
         try:
+            # Use enhanced JWT security if available
+            if JWT_SECURITY_ENHANCED:
+                valid, payload = validate_jwt_token(token)
+                if not valid or not payload:
+                    logger.warning("JWT token validation failed with enhanced security")
+                    raise HTTPException(status_code=401, detail="Invalid or expired token")
+                return payload
+            
+            # Fallback to shared secret validation
             if not self.jwt_secret_key:
-                logger.error("JWT_SECRET_KEY not configured")
+                logger.error("JWT_SECRET_KEY not configured and enhanced security not available")
                 raise HTTPException(status_code=500, detail="JWT configuration error")
             
             # Verify the token using shared secret

@@ -27,13 +27,17 @@ volumes:
     driver: local
   photo_storage:
     driver: local
+  auth_service_logs:
+    driver: local
+  photo_service_logs:
+    driver: local
 
 services:
   # Authentication Service
   auth-service:
     build: 
       context: ./services/auth-service
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.production
     container_name: photoshare-auth-service-prod
     ports:
       - "${AUTH_PORT:-8001}:8000"  # Configurable port
@@ -57,11 +61,22 @@ services:
       auth-db:
         condition: service_healthy
     volumes:
-      - ./services/auth-service:/app
+      - auth_service_logs:/app/logs
     networks:
       - auth-network
       - app-network
     restart: unless-stopped
+    # Security: Container hardening
+    security_opt:
+      - no-new-privileges:true
+    user: "1001:1001"
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
     deploy:
       resources:
         limits:
@@ -137,12 +152,24 @@ services:
       auth-service:
         condition: service_healthy
     volumes:
-      - ./services/photoshare:/app
       - photo_storage:/app/storage
+      - photo_service_logs:/app/logs
     networks:
       - app-network
       - frontend-network
     restart: unless-stopped
+    # Security: Container hardening
+    security_opt:
+      - no-new-privileges:true
+    user: "1001:1001"
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=200m
+      - /var/tmp:noexec,nosuid,size=50m
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
     deploy:
       resources:
         limits:

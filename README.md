@@ -95,8 +95,8 @@ cd tests/integration
 python test_separated_architecture.py
 
 # Or use the API test scripts
-bash scripts/api-tests/test-auth-flow.sh
-bash scripts/api-tests/test-photo-upload.sh
+bash api-integration-tests/test-auth-flow.sh
+bash api-integration-tests/test-photo-upload.sh
 ```
 
 ## API Documentation
@@ -270,7 +270,7 @@ docker-compose -f docker-compose.separated.yml --profile proxy up -d
 ```
 
 ### Security Hardening
-1. Generate strong JWT secrets: `python scripts/generate-jwt-secrets.py`
+1. Generate strong JWT secrets: `python deployment-and-setup-tools/generate-jwt-secrets.py`
 2. Configure SSL/TLS certificates in `nginx/ssl/`
 3. Set up proper firewall rules
 4. Enable database SSL connections

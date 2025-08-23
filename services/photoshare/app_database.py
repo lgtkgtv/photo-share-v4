@@ -91,8 +91,14 @@ class Photo(AppBase):
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     taken_at = Column(DateTime(timezone=True), nullable=True)  # When photo was actually taken
     
-    def to_dict(self):
-        return {
+    def to_dict(self, include_sensitive_data=False):
+        """
+        Convert photo to dictionary.
+        
+        Args:
+            include_sensitive_data: If True, includes storage_path and EXIF data
+        """
+        data = {
             "id": self.id,
             "user_uuid": self.user_uuid,
             "user_email": self.user_email,
@@ -100,15 +106,11 @@ class Photo(AppBase):
             "original_filename": self.original_filename,
             "content_type": self.content_type,
             "file_size": self.file_size,
-            "storage_path": self.storage_path,
             "title": self.title,
             "description": self.description,
             "width": self.width,
             "height": self.height,
             "orientation": self.orientation,
-            "latitude": self.latitude,
-            "longitude": self.longitude,
-            "location_name": self.location_name,
             "is_public": self.is_public,
             "is_featured": self.is_featured,
             "is_archived": self.is_archived,
@@ -120,8 +122,26 @@ class Photo(AppBase):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "taken_at": self.taken_at.isoformat() if self.taken_at else None,
-            "exif_data": self.exif_data
+            # API endpoints for secure access
+            "download_url": f"/api/photos/{self.id}/download",
+            "metadata_url": f"/api/photos/{self.id}"
         }
+        
+        # Only include sensitive data if explicitly requested (for admin/internal use)
+        if include_sensitive_data:
+            data.update({
+                "storage_path": self.storage_path,
+                "exif_data": self.exif_data,
+                "latitude": self.latitude,
+                "longitude": self.longitude,
+                "location_name": self.location_name
+            })
+        else:
+            # For public photos, still include location if the photo owner made it public
+            if self.is_public and self.location_name:
+                data["location_name"] = self.location_name
+                
+        return data
 
 class Album(AppBase):
     """Photo albums/collections."""

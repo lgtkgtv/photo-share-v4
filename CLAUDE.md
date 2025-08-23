@@ -44,6 +44,8 @@ photo-share-consul/
 ├── README.md                         # Updated documentation
 ├── CLAUDE.md                         # This file
 ├── AUTHENTICATION_THREAT_MODEL.md    # Security threat model
+├── WEBAPP_ADMIN_SECURITY_GUIDE.md    # Security operations guide
+├── WORK_REMAINING.md                 # Project status and completion
 ├── services/
 │   ├── auth-service/                 # Dedicated authentication service
 │   │   ├── auth_database.py          # Auth database schema
@@ -63,19 +65,44 @@ photo-share-consul/
 │   │   ├── logging_middleware.py     # Request logging
 │   │   ├── error_handling.py         # Error management
 │   │   ├── encryption.py             # Data encryption
+│   │   ├── advanced_threat_detection.py # ML-based threat detection
+│   │   ├── secret_rotation.py        # Automated secret rotation
+│   │   ├── [13 other security modules] # Complete security suite
 │   │   └── requirements.txt          # App service dependencies
 │   └── shared/
 │       └── security.py               # Shared security utilities
-├── tests/
-│   └── integration/
-│       └── test_separated_architecture.py  # Integration tests
-├── scripts/
-│   ├── api-tests/                    # API testing scripts
-│   ├── generate-jwt-secrets.py       # JWT secret generator
-│   └── validate-config.py            # Configuration validation
-├── monitoring/                       # Monitoring configuration
-├── nginx/                           # Reverse proxy configuration
-└── tools/                           # Development tools
+├── tests/                           # Development testing (pytest)
+│   ├── unit/                        # Unit tests for code components
+│   ├── integration/                 # Service integration tests
+│   ├── functional/                  # End-to-end workflow tests
+│   └── security/                    # Security compliance tests
+├── api-integration-tests/           # API workflow validation
+│   ├── test-auth-flow.sh            # Authentication workflow testing
+│   ├── test-email-verification.sh   # Email verification testing
+│   └── test-photo-upload.sh         # Photo management testing
+├── operational-security-validation/ # Daily security system validation
+│   ├── test-security-improvements.py # Complete security validation
+│   ├── test-audit-trail.py          # Audit system validation
+│   ├── test-waf-protection.sh       # WAF system validation
+│   └── [10 other security validators] # Individual system validators
+├── deployment-and-setup-tools/      # Production deployment automation
+│   ├── deploy-production.sh         # Zero-downtime deployment
+│   ├── setup-environment.py         # Environment initialization
+│   ├── generate-jwt-secrets.py      # Cryptographic key generation
+│   ├── backup-databases.py          # Automated backup system
+│   └── security-scan-containers.py  # Container security scanning
+├── vault-like-secure-storage/       # Cryptographic key vault
+│   ├── jwt_secrets.json             # JWT signing keys
+│   ├── inter_service/               # mTLS certificates
+│   ├── sessions/                    # Session encryption keys
+│   └── upload_security/             # Upload security database
+├── tamper-proof-audit-storage/      # Audit trail integrity
+│   ├── audit_trail.db               # Tamper-proof audit database
+│   ├── audit_signing.key            # Digital signature key
+│   └── audit_verify.pub             # Signature verification key
+├── monitoring/                      # Monitoring configuration
+├── nginx/                          # Reverse proxy configuration
+└── tools/                          # Development tools (SBOM, etc.)
 ```
 
 ## Key Features
@@ -170,9 +197,9 @@ cd tests/integration
 python test_separated_architecture.py
 
 # API flow tests
-bash scripts/api-tests/test-auth-flow.sh
-bash scripts/api-tests/test-email-verification.sh
-bash scripts/api-tests/test-photo-upload.sh
+bash api-integration-tests/test-auth-flow.sh
+bash api-integration-tests/test-email-verification.sh
+bash api-integration-tests/test-photo-upload.sh
 ```
 
 ### Database Operations

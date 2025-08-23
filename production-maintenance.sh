@@ -115,24 +115,59 @@ run_tests() {
 }
 
 backup_databases() {
-    echo "💾 Backing up databases..."
-    timestamp=$(date +%Y%m%d_%H%M%S)
-    backup_dir="backups/$timestamp"
-    mkdir -p $backup_dir
+    echo "🔐 Creating encrypted database backups..."
     
-    # Backup auth database
-    echo "Backing up auth database..."
-    docker compose -f $COMPOSE_FILE exec auth-db pg_dump -U ${AUTH_DB_USER:-auth_user} ${AUTH_DB_NAME:-photo_share_auth} > $backup_dir/auth_db_backup.sql
+    # Check if backup encryption is set up
+    if [ ! -f "/secure/backup_key.txt" ]; then
+        echo "⚠️  Backup encryption key not found. Creating secure backup key..."
+        mkdir -p /secure
+        chmod 700 /secure
+        python3 -c "import secrets; print(secrets.token_urlsafe(32))" > /secure/backup_key.txt
+        chmod 600 /secure/backup_key.txt
+        echo "✅ Backup encryption key created"
+    fi
     
-    # Backup app database
-    echo "Backing up app database..."
-    docker compose -f $COMPOSE_FILE exec app-db pg_dump -U ${APP_DB_USER:-photo_user} ${APP_DB_NAME:-photo_share} > $backup_dir/app_db_backup.sql
+    # Run encrypted backup using Python script
+    if python3 scripts/backup-databases.py backup; then
+        echo "✅ Encrypted backup completed successfully"
+        
+        # List recent backups
+        echo "📋 Recent backups:"
+        python3 scripts/backup-databases.py list 2>/dev/null | \
+            python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    for db in ['auth', 'app']:
+        if db in data:
+            for backup in data[db][-3:]:
+                print(f\"{backup['timestamp']} - {backup['database']} - {backup['filename']} ({backup['file_size']} bytes)\")
+except: pass
+"
+    else
+        echo "❌ Backup failed"
+        return 1
+    fi
     
-    # Backup photo storage
-    echo "Backing up photo storage..."
-    docker compose -f $COMPOSE_FILE exec photo-share-app tar -czf - /app/storage > $backup_dir/photo_storage_backup.tar.gz
+    # Also backup photo storage (encrypted)
+    echo "📸 Creating encrypted photo storage backup..."
+    timestamp=$(date +"%Y%m%d_%H%M%S")
+    backup_dir="/app/backups"
+    mkdir -p "$backup_dir"
     
-    echo "✅ Backup completed: $backup_dir"
+    storage_backup="$backup_dir/photo_storage_backup_$timestamp.tar.gz.gpg"
+    
+    # Get encryption key
+    backup_key=$(cat /secure/backup_key.txt)
+    
+    if docker compose -f $COMPOSE_FILE exec photo-share-app tar -czf - /app/storage | \
+       gpg --symmetric --cipher-algo AES256 --compress-algo 2 --batch --quiet \
+           --passphrase "$backup_key" --output "$storage_backup"; then
+        echo "✅ Photo storage backup encrypted: $(basename "$storage_backup")"
+    else
+        echo "❌ Photo storage backup failed"
+        return 1
+    fi
 }
 
 update_services() {

@@ -187,7 +187,7 @@ photo-share-consul/
 │   │   ├── reports/                 # Test reports
 │   │   └── coverage/                # Coverage reports
 │   │
-│   └── scripts/api-tests/           # Manual API testing scripts
+│   └── api-integration-tests/           # Manual API testing scripts
 │       ├── test-auth-flow.sh
 │       ├── test-email-verification.sh
 │       └── test-photo-upload.sh
@@ -664,7 +664,7 @@ curl -X POST http://localhost:8000/api/photos/upload \
 1. **Use the API docs**: Visit `/docs` endpoints for interactive API testing
 2. **Monitor logs**: Keep logs open to see what's happening
 3. **Database inspection**: Use database clients to examine data
-4. **Test scripts**: Use scripts in `scripts/api-tests/` for common workflows
+4. **Test scripts**: Use scripts in `api-integration-tests/` for common workflows
 5. **Environment variables**: Modify `.env.*` files for configuration changes
 
 ---

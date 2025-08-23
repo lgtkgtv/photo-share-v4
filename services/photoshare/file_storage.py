@@ -10,8 +10,12 @@ import os
 import aiohttp
 import hashlib
 import logging
+import hmac
+import time
+import secrets
 from typing import Optional, Dict, Any
 from pathlib import Path
+from urllib.parse import urlencode
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +24,13 @@ class FileStorageService:
     
     def __init__(self):
         self.storage_base_url = os.getenv("PLATFORM_STORAGE_URL", "http://platform-storage:80")
-        self.local_storage_path = "/tmp/photo_storage"
-        self.max_file_size = 50 * 1024 * 1024  # 50MB
+        # Use persistent storage instead of /tmp
+        self.local_storage_path = os.getenv("STORAGE_PATH", "/app/storage")
+        self.max_file_size = int(os.getenv("MAX_FILE_SIZE_MB", "50")) * 1024 * 1024
+        
+        # Security: Secret key for signed URLs
+        self.storage_secret = os.getenv("STORAGE_SECRET_KEY", secrets.token_urlsafe(32))
+        self.signed_url_expiration = int(os.getenv("SIGNED_URL_EXPIRATION", "300"))  # 5 minutes
         
         # Ensure local storage directory exists
         Path(self.local_storage_path).mkdir(parents=True, exist_ok=True)
@@ -176,9 +185,83 @@ class FileStorageService:
             logger.warning(f"Platform storage deletion failed: {e}")
             return False
     
+    def generate_signed_url(self, storage_path: str, expires_in: Optional[int] = None) -> str:
+        """
+        Generate a signed URL for secure file access.
+        
+        Args:
+            storage_path: Path to the file
+            expires_in: Expiration time in seconds (defaults to configured value)
+            
+        Returns:
+            Signed URL with expiration and signature
+        """
+        if expires_in is None:
+            expires_in = self.signed_url_expiration
+            
+        # Generate expiration timestamp
+        expires_at = int(time.time()) + expires_in
+        
+        # Create signature payload
+        payload = f"{storage_path}:{expires_at}"
+        
+        # Generate HMAC signature
+        signature = hmac.new(
+            self.storage_secret.encode(),
+            payload.encode(),
+            hashlib.sha256
+        ).hexdigest()
+        
+        # Build signed URL
+        params = {
+            'expires': expires_at,
+            'signature': signature
+        }
+        
+        return f"/api/photos/secure/{storage_path}?{urlencode(params)}"
+    
+    def verify_signed_url(self, storage_path: str, expires: str, signature: str) -> bool:
+        """
+        Verify a signed URL is valid and not expired.
+        
+        Args:
+            storage_path: Path to the file
+            expires: Expiration timestamp
+            signature: HMAC signature
+            
+        Returns:
+            True if signature is valid and not expired
+        """
+        try:
+            # Check expiration
+            expires_int = int(expires)
+            if time.time() > expires_int:
+                logger.warning(f"Signed URL expired for {storage_path}")
+                return False
+            
+            # Verify signature
+            payload = f"{storage_path}:{expires_int}"
+            expected_signature = hmac.new(
+                self.storage_secret.encode(),
+                payload.encode(),
+                hashlib.sha256
+            ).hexdigest()
+            
+            # Use hmac.compare_digest for timing-safe comparison
+            is_valid = hmac.compare_digest(signature, expected_signature)
+            
+            if not is_valid:
+                logger.warning(f"Invalid signature for signed URL: {storage_path}")
+            
+            return is_valid
+            
+        except ValueError as e:
+            logger.error(f"Invalid signed URL parameters: {e}")
+            return False
+    
     def get_file_url(self, storage_path: str) -> str:
-        """Get public URL for accessing a file."""
-        return f"{self.storage_base_url}/storage/{storage_path}"
+        """Get signed URL for secure file access."""
+        return self.generate_signed_url(storage_path)
     
     async def health_check(self) -> Dict[str, Any]:
         """Check storage service health."""

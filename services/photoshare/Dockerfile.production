@@ -3,51 +3,66 @@
 
 FROM python:3.11-slim
 
-# Set production environment
+# Security: Set minimal environment
 ENV ENVIRONMENT=production
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONPATH=/app
+ENV PATH="/home/appuser/.local/bin:$PATH"
 
-# Create app user for security
-RUN groupadd -r appuser && useradd -r -g appuser appuser
+# Security: Create non-root user with minimal permissions
+RUN groupadd -r appuser --gid=1001 && \
+    useradd -r -g appuser --uid=1001 --shell=/sbin/nologin \
+    --home-dir=/home/appuser --create-home appuser
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    curl \
-    postgresql-client \
-    && rm -rf /var/lib/apt/lists/*
+# Security: Install security updates and minimal dependencies
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y \
+        curl \
+        ca-certificates \
+        postgresql-client \
+        --no-install-recommends && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Set work directory
 WORKDIR /app
 
-# Copy requirements first for better Docker layer caching
-COPY requirements.txt .
-COPY requirements_fixed.txt .
+# Security: Copy requirements first for better Docker layer caching
+COPY --chown=appuser:appuser requirements.txt .
+COPY --chown=appuser:appuser requirements_fixed.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements_fixed.txt
-
-# Copy application code
-COPY . .
-
-# Create storage directory
-RUN mkdir -p /app/storage && chown -R appuser:appuser /app/storage
-
-# Create logs directory
-RUN mkdir -p /app/logs && chown -R appuser:appuser /app/logs
-
-# Change ownership of app directory
-RUN chown -R appuser:appuser /app
-
-# Switch to non-root user
+# Security: Install Python dependencies without cache and with user-level install
 USER appuser
+RUN pip install --user --no-cache-dir --no-warn-script-location -r requirements_fixed.txt
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+# Security: Copy application code with proper ownership
+COPY --chown=appuser:appuser . .
 
-# Expose port
-EXPOSE 8000
+# Security: Create storage and logs directories with restrictive permissions
+RUN mkdir -p /app/storage /app/logs && \
+    chmod 750 /app/storage /app/logs
 
-# Production command
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+# Security: Set restrictive permissions on application files
+RUN chmod -R 640 /app/*.py && \
+    chmod -R 750 /app/storage /app/logs
+
+# Security: Health check with timeout and limited retries
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+    CMD curl -f --max-time 5 http://localhost:8000/health || exit 1
+
+# Security: Expose port with explicit protocol
+EXPOSE 8000/tcp
+
+# Security: Use explicit numeric user ID
+USER 1001
+
+# Production command with security-focused configuration
+CMD ["uvicorn", "main:app", \
+     "--host", "0.0.0.0", \
+     "--port", "8000", \
+     "--workers", "2", \
+     "--limit-concurrency", "200", \
+     "--limit-max-requests", "10000", \
+     "--timeout-keep-alive", "5"]
