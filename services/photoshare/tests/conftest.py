@@ -14,16 +14,37 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.pool import StaticPool
 
-# Set test environment
+# Set test environment - use SQLite for testing
 os.environ["ENVIRONMENT"] = "test"
 os.environ["JWT_SECRET_KEY"] = "test-secret-key-for-testing-only"
-os.environ["DB_HOST"] = "localhost"
-os.environ["DB_PORT"] = "5432"
-os.environ["POSTGRES_USER"] = "test_user"
-os.environ["POSTGRES_PASSWORD"] = "test_password"
-os.environ["POSTGRES_DB"] = "test_db"
+# Use SQLite for all database operations in tests
+os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
 
-# Import after setting environment  
+# Mock the global db_manager before any imports
+from unittest.mock import Mock, AsyncMock, patch
+import sys
+
+# Create a mock db_manager with proper async generator
+mock_db_manager = Mock()
+mock_db_manager.initialize = AsyncMock(return_value=True)
+mock_db_manager.health_check = AsyncMock(return_value=True)
+mock_db_manager.close = AsyncMock()
+mock_db_manager.engine = Mock()
+mock_db_manager.session_factory = Mock()
+
+# Import database module first
+import database
+
+# Create a proper async generator for get_session that yields None
+async def mock_get_session():
+    yield Mock()  # Return a mock session
+
+mock_db_manager.get_session = mock_get_session
+
+# Patch db_manager immediately
+database.db_manager = mock_db_manager
+
+# Import after setting environment and mocking
 from main import PhotoShareDatabaseService
 from database import Base, User, Photo, Session as DBSession, get_db
 
@@ -152,7 +173,7 @@ def app_with_test_db(test_db_session: AsyncSession, mock_file_storage):
     """Create FastAPI app with test database."""
     service = PhotoShareDatabaseService()
     
-    # Override dependencies
+    # Simple dependency override - this is the FastAPI standard approach
     async def override_get_db():
         yield test_db_session
     
@@ -198,8 +219,12 @@ def auth_headers(test_user: User):
 @pytest.fixture
 def sample_image_data():
     """Sample image file data for testing."""
-    # Minimal valid JPEG header
-    return b'\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00\xff\xd9'
+    # Minimal valid JPEG with enough padding to meet the 100 byte minimum
+    header = b'\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00'
+    # Add padding to reach minimum size requirement (100 bytes)
+    padding = b'\x00' * (100 - len(header) - 2)  # -2 for the end marker
+    footer = b'\xff\xd9'
+    return header + padding + footer
 
 
 @pytest.fixture

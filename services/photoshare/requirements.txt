@@ -26,7 +26,6 @@ alembic==1.13.1
 # JWT and security
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
-python-multipart==0.0.6
 
 # Pydantic - Compatible with FastAPI 0.104.1
 pydantic==2.5.3

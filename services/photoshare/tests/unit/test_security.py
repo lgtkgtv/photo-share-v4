@@ -24,43 +24,63 @@ class TestRateLimiter:
         assert rate_limiter.requests_per_minute == 100
         assert rate_limiter.burst_limit == 10
         assert isinstance(rate_limiter.request_counts, dict)
-        assert isinstance(rate_limiter.blocked_ips, set)
+        assert isinstance(rate_limiter.blocked_ips, dict)
 
     @pytest.mark.unit
     @pytest.mark.security
-    async def test_check_rate_limit_allowed(self):
+    def test_is_rate_limited_allowed(self):
         """Test rate limit check for allowed request."""
+        from unittest.mock import Mock
         rate_limiter = RateLimiter(requests_per_minute=60, burst_limit=10)
         
-        result = await rate_limiter.check_rate_limit("192.168.1.1")
+        # Mock request object
+        request = Mock()
+        request.client = Mock()
+        request.client.host = "192.168.1.1"
+        request.headers = {"user-agent": "test-agent"}
         
-        assert result is True
+        is_limited, info = rate_limiter.is_rate_limited(request, max_requests=60)
+        
+        assert is_limited is False
+        assert "requests_remaining" in info
 
     @pytest.mark.unit
-    @pytest.mark.security
-    async def test_check_rate_limit_blocked_ip(self):
+    @pytest.mark.security  
+    def test_is_rate_limited_blocked_ip(self):
         """Test rate limit check for blocked IP."""
+        from unittest.mock import Mock
+        import time
         rate_limiter = RateLimiter()
-        rate_limiter.blocked_ips.add("192.168.1.1")
         
-        result = await rate_limiter.check_rate_limit("192.168.1.1")
+        # Block an IP with future timestamp
+        rate_limiter.blocked_ips["192.168.1.1"] = time.time() + 900  # 15 minutes from now
         
-        assert result is False
+        # Mock request object
+        request = Mock()
+        request.client = Mock()
+        request.client.host = "192.168.1.1"
+        request.headers = {"user-agent": "test-agent"}
+        
+        is_limited, info = rate_limiter.is_rate_limited(request)
+        
+        assert is_limited is True
+        assert info["error"] == "IP temporarily blocked"
 
     @pytest.mark.unit
     @pytest.mark.security
     def test_get_rate_limit_stats(self):
         """Test getting rate limit statistics."""
+        import time
         rate_limiter = RateLimiter()
-        rate_limiter.request_counts["192.168.1.1"] = [1234567890] * 5
-        rate_limiter.blocked_ips.add("192.168.1.2")
+        rate_limiter.requests["client1"] = [time.time()] * 5
+        rate_limiter.blocked_ips["192.168.1.2"] = time.time() + 900
         
         stats = rate_limiter.get_rate_limit_stats()
         
-        assert "total_requests" in stats
         assert "active_clients" in stats
-        assert "blocked_ips_count" in stats
-        assert stats["blocked_ips_count"] == 1
+        assert "blocked_ips" in stats
+        assert "total_tracked_requests" in stats
+        assert stats["blocked_ips"] == 1
 
 
 class TestInputValidator:
@@ -176,7 +196,7 @@ class TestSecurityAudit:
         assert len(audit.security_events) == 1
         event = audit.security_events[0]
         assert event["event_type"] == "TEST_EVENT"
-        assert event["event_data"] == {"test": "data"}
+        assert event["details"] == {"test": "data"}
         assert event["severity"] == "warning"
         assert event["client_ip"] == "192.168.1.1"
 
@@ -195,8 +215,8 @@ class TestSecurityAudit:
         
         assert "total_events" in summary
         assert "event_types" in summary
-        assert "severity_breakdown" in summary
-        assert "recent_events" in summary
+        assert "severity_distribution" in summary
+        assert "recent_critical_events" in summary
         assert summary["total_events"] == 3
         assert summary["event_types"]["EVENT1"] == 2
         assert summary["event_types"]["EVENT2"] == 1

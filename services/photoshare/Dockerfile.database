@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements with database dependencies
-COPY services/photoshare/requirements_fixed.txt requirements.txt
+COPY services/photoshare/requirements.txt requirements.txt
 
 # Install Python dependencies with database support
 RUN pip install --no-cache-dir -r requirements.txt
@@ -28,7 +28,7 @@ COPY services/photoshare/error_handling.py /app/error_handling.py
 COPY services/photoshare/security.py /app/security.py
 COPY services/photoshare/performance_simple.py /app/performance_simple.py
 COPY services/photoshare/monitoring.py /app/monitoring.py
-COPY services/photoshare/main_database.py /app/main.py
+COPY services/photoshare/main.py /app/main.py
 
 # Copy test files and dependencies
 COPY services/photoshare/requirements_test.txt /app/requirements_test.txt

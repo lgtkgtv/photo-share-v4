@@ -459,6 +459,10 @@ class InputValidator:
         
         local, domain = email.split("@")
         
+        # Check that both local and domain parts exist
+        if not local or not domain:
+            return False
+        
         # Check for suspicious patterns
         suspicious_patterns = [
             "../", "script", "<", ">", "javascript:", "data:",

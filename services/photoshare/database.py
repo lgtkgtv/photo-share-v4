@@ -12,23 +12,29 @@ from datetime import datetime, timezone
 from typing import AsyncGenerator, Optional
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, LargeBinary, ForeignKey, UniqueConstraint
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
 import logging
 
 logger = logging.getLogger(__name__)
+# FORCE REBUILD - Database configuration with proper DNS resolution
 
-# Database configuration
-DB_HOST = os.getenv("DB_HOST", "db")
-DB_PORT = os.getenv("DB_PORT", "5432")
-DB_USER = os.getenv("POSTGRES_USER", "postgres")
-DB_PASSWORD = os.getenv("POSTGRES_PASSWORD", "postgres123")
-DB_NAME = os.getenv("POSTGRES_DB", "photo_share")
+# Database configuration - ensure fresh environment reading
+def get_database_url():
+    """Get database URL from environment variables with fresh reading."""
+    db_host = os.getenv("DB_HOST", "db")
+    db_port = os.getenv("DB_PORT", "5432")
+    db_user = os.getenv("POSTGRES_USER", "postgres")
+    db_password = os.getenv("POSTGRES_PASSWORD", "postgres123")
+    db_name = os.getenv("POSTGRES_DB", "photo_share")
+    
+    return os.getenv(
+        "DATABASE_URL", 
+        f"postgresql+asyncpg://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+    )
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", 
-    f"postgresql+asyncpg://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-)
+# Get DATABASE_URL dynamically
+DATABASE_URL = get_database_url()
 
 # SQLAlchemy setup
 Base = declarative_base()
@@ -215,8 +221,8 @@ class EmailVerification(Base):
 
 # Database Engine and Session
 class DatabaseManager:
-    def __init__(self, database_url: str = DATABASE_URL):
-        self.database_url = database_url
+    def __init__(self, database_url: str = None):
+        self.database_url = database_url or get_database_url()
         self.engine = None
         self.session_factory = None
         
@@ -460,6 +466,18 @@ class PhotoRepository:
             select(Photo).where(Photo.is_public == True).offset(skip).limit(limit)
         )
         return result.scalars().all()
+    
+    async def delete_photo(self, photo_id: int) -> bool:
+        """Delete a photo by ID."""
+        from sqlalchemy import delete
+        try:
+            stmt = delete(Photo).where(Photo.id == photo_id)
+            result = await self.session.execute(stmt)
+            await self.session.commit()
+            return result.rowcount > 0
+        except Exception as e:
+            await self.session.rollback()
+            return False
 
 class SessionRepository:
     def __init__(self, session: AsyncSession):
@@ -481,13 +499,18 @@ class SessionRepository:
         )
         return result.scalar_one_or_none()
     
-    async def invalidate_session(self, token: str):
+    async def invalidate_session(self, token: str) -> bool:
         """Invalidate a session."""
         from sqlalchemy import update
-        await self.session.execute(
-            update(Session).where(Session.token == token).values(is_active=False)
-        )
-        await self.session.commit()
+        try:
+            result = await self.session.execute(
+                update(Session).where(Session.token == token).values(is_active=False)
+            )
+            await self.session.commit()
+            return result.rowcount > 0
+        except Exception as e:
+            await self.session.rollback()
+            return False
 
 class EmailVerificationRepository:
     def __init__(self, session: AsyncSession):

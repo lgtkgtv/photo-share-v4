@@ -124,7 +124,7 @@ class TestPhotoRepository:
         """Test getting user's photos."""
         repo = PhotoRepository(test_db_session)
         
-        photos = await repo.get_user_photos(test_user.id, skip=0, limit=10)
+        photos = await repo.get_photos_by_user(test_user.id, skip=0, limit=10)
         
         assert len(photos) == 1
         assert photos[0].id == test_photo.id
@@ -200,7 +200,7 @@ class TestSessionRepository:
         
         # Create and then deactivate session
         session = await repo.create_session(test_user.id, "test_token")
-        success = await repo.deactivate_session("test_token")
+        success = await repo.invalidate_session("test_token")
         
         assert success is True
         
