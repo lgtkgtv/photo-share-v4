@@ -18,8 +18,8 @@ class TestPrometheusMetrics:
         
         assert metrics is not None
         assert metrics.service_name == "photo_share"
-        assert hasattr(metrics, 'request_count')
-        assert hasattr(metrics, 'request_duration')
+        assert hasattr(metrics, 'requests_total')
+        assert hasattr(metrics, 'request_duration_seconds')
 
     @pytest.mark.unit
     def test_record_request(self):
@@ -72,7 +72,7 @@ class TestMonitoringMiddleware:
         async def mock_call_next(req):
             return response
         
-        result = await middleware.dispatch(request, mock_call_next)
+        result = await middleware(request, mock_call_next)
         
         assert result == response
 
@@ -88,16 +88,15 @@ class TestMonitoringDashboard:
         assert dashboard is not None
 
     @pytest.mark.unit
-    def test_get_metrics_endpoint(self):
-        """Test metrics endpoint."""
+    def test_get_monitoring_dashboard_simple(self):
+        """Test monitoring dashboard retrieval."""
         dashboard = MonitoringDashboard()
         
-        # Mock FastAPI app
-        app = Mock()
-        dashboard.setup_dashboard(app)
+        # Test that dashboard returns metrics
+        result = dashboard.get_monitoring_dashboard()
         
-        # Should add routes to app
-        assert app.add_api_route.called or hasattr(dashboard, 'get_metrics')
+        assert isinstance(result, dict)
+        assert 'metrics_summary' in result
 
     @pytest.mark.unit
     async def test_get_system_stats(self):

@@ -167,7 +167,7 @@ class TestQueryOptimizer:
         
         @optimizer.monitor_query("test_query")
         @pytest.mark.asyncio
-    async def test_function():
+        async def test_function():
             time.sleep(0.1)  # Simulate work
             return "result"
         

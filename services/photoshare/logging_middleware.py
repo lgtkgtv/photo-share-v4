@@ -342,6 +342,7 @@ class LoggingConfig:
     def setup_structured_logging():
         """Setup structured logging configuration."""
         import logging.config
+        import os
         
         config = {
             "version": 1,
@@ -361,13 +362,6 @@ class LoggingConfig:
                     "class": "logging.StreamHandler",
                     "formatter": "structured",
                     "stream": "ext://sys.stdout"
-                },
-                "file": {
-                    "class": "logging.FileHandler",
-                    "formatter": "json",
-                    "filename": "logs/app.log",
-                    "mode": "a",
-                    "encoding": "utf-8"
                 }
             },
             "loggers": {
@@ -388,13 +382,18 @@ class LoggingConfig:
             }
         }
         
-        # Create logs directory if it doesn't exist
-        import os
-        os.makedirs("logs", exist_ok=True)
-        
-        # Add file handler in production
-        import os
+        # Add file handler only in production
         if os.getenv("ENVIRONMENT") == "production":
+            # Create logs directory if it doesn't exist
+            os.makedirs("logs", exist_ok=True)
+            
+            config["handlers"]["file"] = {
+                "class": "logging.FileHandler",
+                "formatter": "json",
+                "filename": "logs/app.log",
+                "mode": "a",
+                "encoding": "utf-8"
+            }
             config["loggers"][""]["handlers"].append("file")
         
         logging.config.dictConfig(config)

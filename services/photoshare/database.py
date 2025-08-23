@@ -19,9 +19,15 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Database configuration
+DB_HOST = os.getenv("DB_HOST", "db")
+DB_PORT = os.getenv("DB_PORT", "5432")
+DB_USER = os.getenv("POSTGRES_USER", "postgres")
+DB_PASSWORD = os.getenv("POSTGRES_PASSWORD", "postgres123")
+DB_NAME = os.getenv("POSTGRES_DB", "photo_share")
+
 DATABASE_URL = os.getenv(
     "DATABASE_URL", 
-    "postgresql+asyncpg://postgres:postgres@platform-db:5432/photo_share"
+    f"postgresql+asyncpg://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 )
 
 # SQLAlchemy setup

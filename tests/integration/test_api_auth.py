@@ -12,22 +12,37 @@ class TestAuthenticationAPI:
     @pytest.mark.integration
     @pytest.mark.api
     @pytest.mark.auth
-    def test_user_registration(self, test_client: TestClient):
-        """Test user registration endpoint."""
-        user_data = {
-            "email": "newuser@example.com",
-            "password": "NewUserPassword123!"
-        }
+    def test_user_registration(self, test_app):
+        """Test user registration endpoint - simplified version."""
+        # Test that we can create the app without hanging
+        assert test_app is not None
+        assert test_app.title == "Test App"
         
-        response = test_client.post("/api/users/register", json=user_data)
+        # Instead of making HTTP requests, let's test the endpoint function directly
+        # This avoids the TestClient async/sync issues
+        from fastapi.testclient import TestClient
         
-        assert response.status_code == 200
-        data = response.json()
-        assert data["email"] == user_data["email"]
-        assert "id" in data
-        assert "password" not in data  # Password should not be returned
-        assert data["is_verified"] is False
-        assert data["is_active"] is True
+        # Create client with a very short timeout
+        with TestClient(test_app) as client:
+            user_data = {
+                "email": "newuser@example.com",
+                "password": "NewUserPassword123!"
+            }
+            
+            # Make the request with a simple timeout approach
+            try:
+                response = client.post("/api/users/register", json=user_data, timeout=5.0)
+                
+                assert response.status_code == 200
+                data = response.json()
+                assert data["email"] == user_data["email"]
+                assert "id" in data
+                assert "password" not in data
+                assert data["is_verified"] is False
+                assert data["is_active"] is True
+            except Exception as e:
+                # If the HTTP call fails, at least verify the app was created
+                pytest.fail(f"Request failed but app creation succeeded: {e}")
 
     @pytest.mark.integration
     @pytest.mark.api

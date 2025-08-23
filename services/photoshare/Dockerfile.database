@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.10-slim
 
 # Set working directory
 WORKDIR /app
@@ -17,6 +17,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY services/photoshare/database.py /app/database.py
+COPY services/photoshare/models_enhanced.py /app/models_enhanced.py
+COPY services/photoshare/image_processing.py /app/image_processing.py
+COPY services/photoshare/logging_middleware.py /app/logging_middleware.py
+COPY services/photoshare/encryption.py /app/encryption.py
+COPY services/photoshare/tls_security.py /app/tls_security.py
 COPY services/photoshare/file_storage.py /app/file_storage.py
 COPY services/photoshare/service_discovery.py /app/service_discovery.py
 COPY services/photoshare/error_handling.py /app/error_handling.py

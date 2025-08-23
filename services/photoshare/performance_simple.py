@@ -25,7 +25,9 @@ logger = logging.getLogger(__name__)
 # Redis imports with fallback
 try:
     import redis.asyncio as redis
-    import aioredis
+    # Skip aioredis import in test environments due to Python 3.12 compatibility issue
+    if os.getenv("ENVIRONMENT") != "test":
+        import aioredis
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
@@ -489,8 +491,16 @@ class QueryOptimizer:
                     return result
                     
                 except Exception as e:
-                    if query_name in self.query_stats:
-                        self.query_stats[query_name]["errors"] += 1
+                    # Ensure query stats entry exists even for failed queries
+                    if query_name not in self.query_stats:
+                        self.query_stats[query_name] = {
+                            "count": 0,
+                            "total_time": 0.0,
+                            "min_time": float('inf'),
+                            "max_time": 0.0,
+                            "errors": 0
+                        }
+                    self.query_stats[query_name]["errors"] += 1
                     logger.error(f"Query error in {query_name}: {e}")
                     raise
                     

@@ -11,8 +11,26 @@ services:
     networks:
       - default
       - platform_network
+    depends_on:
+      - db
+      
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: photo_share
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+    ports:
+      - "5433:5432"
+    networks:
+      - default
+      - platform_network
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
 networks:
   platform_network:
-    external: true
-    name: photo-share-3_platform-network
+    driver: bridge
+
+volumes:
+  postgres_data:

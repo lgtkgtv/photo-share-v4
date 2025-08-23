@@ -1,0 +1,151 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Integration Test Report - integration_1755941943_440e</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .header { background: #f4f4f4; padding: 20px; border-radius: 5px; }
+        .summary { display: flex; gap: 20px; margin: 20px 0; }
+        .metric { background: #e7f3ff; padding: 15px; border-radius: 5px; text-align: center; flex: 1; }
+        .passed { background: #d4edda; }
+        .failed { background: #f8d7da; }
+        .suite { margin: 20px 0; border: 1px solid #ddd; border-radius: 5px; }
+        .suite-header { background: #f8f9fa; padding: 10px; font-weight: bold; }
+        .test { padding: 5px 15px; border-bottom: 1px solid #eee; }
+        .test-passed { color: #28a745; }
+        .test-failed { color: #dc3545; }
+        .recommendations { background: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🧪 Integration Test Report</h1>
+        <p><strong>Execution ID:</strong> integration_1755941943_440e</p>
+        <p><strong>Timestamp:</strong> 2025-08-23T02:39:04.049660</p>
+        <p><strong>Duration:</strong> 0.77 seconds</p>
+        <p><strong>Status:</strong> <span class="passed">PASSED</span></p>
+    </div>
+    
+    <div class="summary">
+        <div class="metric passed">
+            <h3>18</h3>
+            <p>Passed</p>
+        </div>
+        <div class="metric failed">
+            <h3>0</h3>
+            <p>Failed</p>
+        </div>
+        <div class="metric">
+            <h3>18</h3>
+            <p>Total Tests</p>
+        </div>
+        <div class="metric">
+            <h3>4</h3>
+            <p>Test Suites</p>
+        </div>
+    </div>
+
+    <div class="suite">
+        <div class="suite-header">
+            📁 Mock-Based API Tests (mock_based)
+            - 5✅ 0❌ 0⏭️ (0.08s)
+        </div>
+
+        <div class="test test-passed">
+            ✅ mock_test_user_registration (0.01s)
+            
+        </div>
+        <div class="test test-passed">
+            ✅ mock_test_user_login (0.02s)
+            
+        </div>
+        <div class="test test-passed">
+            ✅ mock_test_photo_upload (0.03s)
+            
+        </div>
+        <div class="test test-passed">
+            ✅ mock_test_photo_list (0.01s)
+            
+        </div>
+        <div class="test test-passed">
+            ✅ mock_test_health_check (0.01s)
+            
+        </div></div>
+    <div class="suite">
+        <div class="suite-header">
+            📁 Component Integration Tests (component)
+            - 5✅ 0❌ 0⏭️ (0.16s)
+        </div>
+
+        <div class="test test-passed">
+            ✅ component_test_database (0.05s)
+            
+        </div>
+        <div class="test test-passed">
+            ✅ component_test_security (0.03s)
+            
+        </div>
+        <div class="test test-passed">
+            ✅ component_test_file_storage (0.04s)
+            
+        </div>
+        <div class="test test-passed">
+            ✅ component_test_monitoring (0.02s)
+            
+        </div>
+        <div class="test test-passed">
+            ✅ component_test_caching (0.02s)
+            
+        </div></div>
+    <div class="suite">
+        <div class="suite-header">
+            📁 Contract Tests (contract)
+            - 4✅ 0❌ 0⏭️ (0.08s)
+        </div>
+
+        <div class="test test-passed">
+            ✅ contract_test_user_api (0.02s)
+            
+        </div>
+        <div class="test test-passed">
+            ✅ contract_test_photo_api (0.03s)
+            
+        </div>
+        <div class="test test-passed">
+            ✅ contract_test_error_responses (0.01s)
+            
+        </div>
+        <div class="test test-passed">
+            ✅ contract_test_data_formats (0.02s)
+            
+        </div></div>
+    <div class="suite">
+        <div class="suite-header">
+            📁 Full Integration Tests (full_integration)
+            - 4✅ 0❌ 0⏭️ (0.45s)
+        </div>
+
+        <div class="test test-passed">
+            ✅ full_test_user_workflow (0.10s)
+            
+        </div>
+        <div class="test test-passed">
+            ✅ full_test_photo_workflow (0.15s)
+            
+        </div>
+        <div class="test test-passed">
+            ✅ full_test_security (0.08s)
+            
+        </div>
+        <div class="test test-passed">
+            ✅ full_test_performance (0.12s)
+            
+        </div></div>
+    <div class="recommendations">
+        <h3>💡 Recommendations</h3>
+        <ul><li>📈 Consider expanding test coverage - current suite has fewer than 50 tests</li><li>🎭 Add more mock-based tests for faster feedback</li><li>📜 Consider adding contract tests for API stability</li>
+        </ul>
+    </div>
+</body>
+</html>

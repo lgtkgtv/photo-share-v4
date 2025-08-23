@@ -1,6 +1,7 @@
 """
 Unit tests for security components.
 """
+import time
 import pytest
 from unittest.mock import Mock, patch
 from fastapi import Request
@@ -28,26 +29,37 @@ class TestRateLimiter:
 
     @pytest.mark.unit
     @pytest.mark.security
-    @pytest.mark.asyncio
-    async def test_check_rate_limit_allowed(self):
+    def test_is_rate_limited_allowed(self):
         """Test rate limit check for allowed request."""
         rate_limiter = RateLimiter(requests_per_minute=60, burst_limit=10)
         
-        result = await rate_limiter.check_rate_limit("192.168.1.1")
+        # Create mock request
+        request = Mock()
+        request.client.host = "192.168.1.1"
+        request.headers = {}
         
-        assert result is True
+        is_limited, stats = rate_limiter.is_rate_limited(request)
+        
+        assert is_limited is False
+        assert isinstance(stats, dict)
 
     @pytest.mark.unit
     @pytest.mark.security
-    @pytest.mark.asyncio
-    async def test_check_rate_limit_blocked_ip(self):
+    def test_is_rate_limited_blocked_ip(self):
         """Test rate limit check for blocked IP."""
         rate_limiter = RateLimiter()
-        rate_limiter.blocked_ips.add("192.168.1.1")
+        # Block an IP
+        rate_limiter.blocked_ips["192.168.1.1"] = time.time() + 3600  # Block for 1 hour
         
-        result = await rate_limiter.check_rate_limit("192.168.1.1")
+        # Create mock request
+        request = Mock()
+        request.client.host = "192.168.1.1"
+        request.headers = {}
         
-        assert result is False
+        is_limited, stats = rate_limiter.is_rate_limited(request)
+        
+        assert is_limited is True
+        assert isinstance(stats, dict)
 
     @pytest.mark.unit
     @pytest.mark.security
@@ -72,21 +84,17 @@ class TestInputValidator:
     @pytest.mark.security
     def test_validate_email_valid(self):
         """Test email validation with valid email."""
-        validator = InputValidator()
-        
-        assert validator.validate_email("test@example.com") is True
-        assert validator.validate_email("user.name+tag@domain.co.uk") is True
+        assert InputValidator.validate_email("test@example.com") is True
+        assert InputValidator.validate_email("user.name+tag@domain.co.uk") is True
 
     @pytest.mark.unit
-    @pytest.mark.security
+    @pytest.mark.security  
     def test_validate_email_invalid(self):
         """Test email validation with invalid email."""
-        validator = InputValidator()
-        
-        assert validator.validate_email("invalid-email") is False
-        assert validator.validate_email("@domain.com") is False
-        assert validator.validate_email("user@") is False
-        assert validator.validate_email("") is False
+        assert InputValidator.validate_email("invalid-email") is False
+        assert InputValidator.validate_email("@domain.com") is False
+        assert InputValidator.validate_email("user@") is False
+        assert InputValidator.validate_email("") is False
 
     @pytest.mark.unit
     @pytest.mark.security

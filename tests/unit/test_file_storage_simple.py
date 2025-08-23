@@ -16,7 +16,8 @@ class TestFileStorageService:
         storage = FileStorageService()
         
         assert storage is not None
-        assert hasattr(storage, 'storage_path')
+        assert hasattr(storage, 'storage_base_url')
+        assert hasattr(storage, 'local_storage_path')
 
     @pytest.mark.unit
     @pytest.mark.asyncio

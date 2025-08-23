@@ -1,0 +1,383 @@
+{
+  "execution_id": "integration_1755941943_440e",
+  "timestamp": "2025-08-23T02:39:04.049660",
+  "version": "2.3.0-monitoring",
+  "environment": "test",
+  "total_duration": 0.7688140869140625,
+  "overall_status": "PASSED",
+  "summary": {
+    "total_tests": 18,
+    "total_passed": 18,
+    "total_failed": 0,
+    "total_skipped": 0,
+    "total_errors": 0,
+    "success_rate": 100.0,
+    "test_suites": 4
+  },
+  "test_suites": [
+    {
+      "suite_name": "Mock-Based API Tests",
+      "test_type": "TestType.MOCK_BASED",
+      "total_tests": 5,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "errors": 0,
+      "duration": 0.07579970359802246,
+      "coverage": 0.0,
+      "tests": [
+        {
+          "test_name": "mock_test_user_registration",
+          "test_type": "TestType.MOCK_BASED",
+          "result": "TestResult.PASSED",
+          "duration": 0.01008296012878418,
+          "error_message": null,
+          "metrics": {
+            "duration": 0.01008296012878418,
+            "memory_usage": 0,
+            "cpu_usage": 0.0,
+            "database_queries": 0,
+            "api_calls": 0
+          },
+          "tags": [
+            "mock_based"
+          ]
+        },
+        {
+          "test_name": "mock_test_user_login",
+          "test_type": "TestType.MOCK_BASED",
+          "result": "TestResult.PASSED",
+          "duration": 0.020090103149414062,
+          "error_message": null,
+          "metrics": {
+            "duration": 0.020090103149414062,
+            "memory_usage": 0,
+            "cpu_usage": 0.0,
+            "database_queries": 0,
+            "api_calls": 0
+          },
+          "tags": [
+            "mock_based"
+          ]
+        },
+        {
+          "test_name": "mock_test_photo_upload",
+          "test_type": "TestType.MOCK_BASED",
+          "result": "TestResult.PASSED",
+          "duration": 0.030097484588623047,
+          "error_message": null,
+          "metrics": {
+            "duration": 0.030097484588623047,
+            "memory_usage": 0,
+            "cpu_usage": 0.0,
+            "database_queries": 0,
+            "api_calls": 0
+          },
+          "tags": [
+            "mock_based"
+          ]
+        },
+        {
+          "test_name": "mock_test_photo_list",
+          "test_type": "TestType.MOCK_BASED",
+          "result": "TestResult.PASSED",
+          "duration": 0.010138511657714844,
+          "error_message": null,
+          "metrics": {
+            "duration": 0.010138511657714844,
+            "memory_usage": 0,
+            "cpu_usage": 0.0,
+            "database_queries": 0,
+            "api_calls": 0
+          },
+          "tags": [
+            "mock_based"
+          ]
+        },
+        {
+          "test_name": "mock_test_health_check",
+          "test_type": "TestType.MOCK_BASED",
+          "result": "TestResult.PASSED",
+          "duration": 0.005118846893310547,
+          "error_message": null,
+          "metrics": {
+            "duration": 0.005118846893310547,
+            "memory_usage": 0,
+            "cpu_usage": 0.0,
+            "database_queries": 0,
+            "api_calls": 0
+          },
+          "tags": [
+            "mock_based"
+          ]
+        }
+      ]
+    },
+    {
+      "suite_name": "Component Integration Tests",
+      "test_type": "TestType.COMPONENT",
+      "total_tests": 5,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "errors": 0,
+      "duration": 0.16087770462036133,
+      "coverage": 0.0,
+      "tests": [
+        {
+          "test_name": "component_test_database",
+          "test_type": "TestType.COMPONENT",
+          "result": "TestResult.PASSED",
+          "duration": 0.05006742477416992,
+          "error_message": null,
+          "metrics": {
+            "duration": 0.05006742477416992,
+            "memory_usage": 0,
+            "cpu_usage": 0.0,
+            "database_queries": 0,
+            "api_calls": 0
+          },
+          "tags": [
+            "component"
+          ]
+        },
+        {
+          "test_name": "component_test_security",
+          "test_type": "TestType.COMPONENT",
+          "result": "TestResult.PASSED",
+          "duration": 0.03011178970336914,
+          "error_message": null,
+          "metrics": {
+            "duration": 0.03011178970336914,
+            "memory_usage": 0,
+            "cpu_usage": 0.0,
+            "database_queries": 0,
+            "api_calls": 0
+          },
+          "tags": [
+            "component"
+          ]
+        },
+        {
+          "test_name": "component_test_file_storage",
+          "test_type": "TestType.COMPONENT",
+          "result": "TestResult.PASSED",
+          "duration": 0.04010820388793945,
+          "error_message": null,
+          "metrics": {
+            "duration": 0.04010820388793945,
+            "memory_usage": 0,
+            "cpu_usage": 0.0,
+            "database_queries": 0,
+            "api_calls": 0
+          },
+          "tags": [
+            "component"
+          ]
+        },
+        {
+          "test_name": "component_test_monitoring",
+          "test_type": "TestType.COMPONENT",
+          "result": "TestResult.PASSED",
+          "duration": 0.020115375518798828,
+          "error_message": null,
+          "metrics": {
+            "duration": 0.020115375518798828,
+            "memory_usage": 0,
+            "cpu_usage": 0.0,
+            "database_queries": 0,
+            "api_calls": 0
+          },
+          "tags": [
+            "component"
+          ]
+        },
+        {
+          "test_name": "component_test_caching",
+          "test_type": "TestType.COMPONENT",
+          "result": "TestResult.PASSED",
+          "duration": 0.020112037658691406,
+          "error_message": null,
+          "metrics": {
+            "duration": 0.020112037658691406,
+            "memory_usage": 0,
+            "cpu_usage": 0.0,
+            "database_queries": 0,
+            "api_calls": 0
+          },
+          "tags": [
+            "component"
+          ]
+        }
+      ]
+    },
+    {
+      "suite_name": "Contract Tests",
+      "test_type": "TestType.CONTRACT",
+      "total_tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "errors": 0,
+      "duration": 0.08066201210021973,
+      "coverage": 0.0,
+      "tests": [
+        {
+          "test_name": "contract_test_user_api",
+          "test_type": "TestType.CONTRACT",
+          "result": "TestResult.PASSED",
+          "duration": 0.020119190216064453,
+          "error_message": null,
+          "metrics": {
+            "duration": 0.020119190216064453,
+            "memory_usage": 0,
+            "cpu_usage": 0.0,
+            "database_queries": 0,
+            "api_calls": 0
+          },
+          "tags": [
+            "contract"
+          ]
+        },
+        {
+          "test_name": "contract_test_photo_api",
+          "test_type": "TestType.CONTRACT",
+          "result": "TestResult.PASSED",
+          "duration": 0.030106782913208008,
+          "error_message": null,
+          "metrics": {
+            "duration": 0.030106782913208008,
+            "memory_usage": 0,
+            "cpu_usage": 0.0,
+            "database_queries": 0,
+            "api_calls": 0
+          },
+          "tags": [
+            "contract"
+          ]
+        },
+        {
+          "test_name": "contract_test_error_responses",
+          "test_type": "TestType.CONTRACT",
+          "result": "TestResult.PASSED",
+          "duration": 0.010092735290527344,
+          "error_message": null,
+          "metrics": {
+            "duration": 0.010092735290527344,
+            "memory_usage": 0,
+            "cpu_usage": 0.0,
+            "database_queries": 0,
+            "api_calls": 0
+          },
+          "tags": [
+            "contract"
+          ]
+        },
+        {
+          "test_name": "contract_test_data_formats",
+          "test_type": "TestType.CONTRACT",
+          "result": "TestResult.PASSED",
+          "duration": 0.020099639892578125,
+          "error_message": null,
+          "metrics": {
+            "duration": 0.020099639892578125,
+            "memory_usage": 0,
+            "cpu_usage": 0.0,
+            "database_queries": 0,
+            "api_calls": 0
+          },
+          "tags": [
+            "contract"
+          ]
+        }
+      ]
+    },
+    {
+      "suite_name": "Full Integration Tests",
+      "test_type": "TestType.FULL_INTEGRATION",
+      "total_tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "errors": 0,
+      "duration": 0.45137929916381836,
+      "coverage": 0.0,
+      "tests": [
+        {
+          "test_name": "full_test_user_workflow",
+          "test_type": "TestType.FULL_INTEGRATION",
+          "result": "TestResult.PASSED",
+          "duration": 0.1002967357635498,
+          "error_message": null,
+          "metrics": {
+            "duration": 0.1002967357635498,
+            "memory_usage": 0,
+            "cpu_usage": 0.0,
+            "database_queries": 0,
+            "api_calls": 0
+          },
+          "tags": [
+            "full_integration"
+          ]
+        },
+        {
+          "test_name": "full_test_photo_workflow",
+          "test_type": "TestType.FULL_INTEGRATION",
+          "result": "TestResult.PASSED",
+          "duration": 0.1502697467803955,
+          "error_message": null,
+          "metrics": {
+            "duration": 0.1502697467803955,
+            "memory_usage": 0,
+            "cpu_usage": 0.0,
+            "database_queries": 0,
+            "api_calls": 0
+          },
+          "tags": [
+            "full_integration"
+          ]
+        },
+        {
+          "test_name": "full_test_security",
+          "test_type": "TestType.FULL_INTEGRATION",
+          "result": "TestResult.PASSED",
+          "duration": 0.08026814460754395,
+          "error_message": null,
+          "metrics": {
+            "duration": 0.08026814460754395,
+            "memory_usage": 0,
+            "cpu_usage": 0.0,
+            "database_queries": 0,
+            "api_calls": 0
+          },
+          "tags": [
+            "full_integration"
+          ]
+        },
+        {
+          "test_name": "full_test_performance",
+          "test_type": "TestType.FULL_INTEGRATION",
+          "result": "TestResult.PASSED",
+          "duration": 0.12030696868896484,
+          "error_message": null,
+          "metrics": {
+            "duration": 0.12030696868896484,
+            "memory_usage": 0,
+            "cpu_usage": 0.0,
+            "database_queries": 0,
+            "api_calls": 0
+          },
+          "tags": [
+            "full_integration"
+          ]
+        }
+      ]
+    }
+  ],
+  "recommendations": [
+    "\ud83d\udcc8 Consider expanding test coverage - current suite has fewer than 50 tests",
+    "\ud83c\udfad Add more mock-based tests for faster feedback",
+    "\ud83d\udcdc Consider adding contract tests for API stability"
+  ],
+  "artifacts": null
+}

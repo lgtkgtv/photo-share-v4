@@ -298,11 +298,11 @@ class MonitoringDashboard:
                 "dashboard_enabled": True
             },
             "metrics_summary": {
-                "total_requests": self.metrics.requests_total._value._value,
-                "total_database_queries": self.metrics.database_queries_total._value._value,
-                "total_cache_operations": self.metrics.cache_operations_total._value._value,
-                "total_errors": self.metrics.errors_total._value._value,
-                "total_auth_attempts": self.metrics.authentication_attempts._value._value
+                "total_requests": getattr(self.metrics.requests_total._value, '_value', 0) if hasattr(self.metrics.requests_total, '_value') else 0,
+                "total_database_queries": getattr(self.metrics.database_queries_total._value, '_value', 0) if hasattr(self.metrics.database_queries_total, '_value') else 0,
+                "total_cache_operations": getattr(self.metrics.cache_operations_total._value, '_value', 0) if hasattr(self.metrics.cache_operations_total, '_value') else 0,
+                "total_errors": getattr(self.metrics.errors_total._value, '_value', 0) if hasattr(self.metrics.errors_total, '_value') else 0,
+                "total_auth_attempts": getattr(self.metrics.authentication_attempts._value, '_value', 0) if hasattr(self.metrics.authentication_attempts, '_value') else 0
             },
             "health_status": {
                 "service_healthy": True,

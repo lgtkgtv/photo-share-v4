@@ -1,668 +1,367 @@
 # Photo Share Service - Architecture Documentation
-
 **Version**: 2.3.0-monitoring  
-**Date**: 2025-08-18  
-**Service**: Single FastAPI Photo Sharing Application  
-
----
+**Updated**: August 23, 2025  
+**Architecture**: Single-Service FastAPI Application  
 
 ## 🏗️ Architecture Overview
 
-The Photo Share Service follows a **single-service architecture** built with FastAPI and PostgreSQL, designed for production-ready deployment with comprehensive security, performance optimization, and monitoring capabilities.
+The Photo Share Service implements a **production-ready single-service architecture** built with FastAPI and PostgreSQL, designed for high performance, security, and maintainability.
 
 ### Design Principles
 
-1. **Simplicity**: Single FastAPI service eliminates complexity of microservices
-2. **Security First**: JWT authentication, input validation, rate limiting
-3. **Performance**: Memory caching, query optimization, async operations
-4. **Monitoring**: Comprehensive metrics and health checks
-5. **Maintainability**: Clean modular code with comprehensive testing
+1. **Simplicity**: Single FastAPI service eliminates microservice complexity
+2. **Security First**: JWT authentication, input validation, comprehensive security testing
+3. **Performance**: Memory caching, query optimization, async operations throughout
+4. **Observability**: Prometheus metrics, comprehensive monitoring, health checks
+5. **Testability**: Comprehensive test suite across 7 categories
 
 ---
 
-## 📁 Code Architecture
-
-### Core Service Structure
+## 📁 Project Structure
 
 ```
-services/photoshare/
-├── main_database.py          # 🚀 FastAPI Application Entry Point
-├── database.py              # 🗄️  PostgreSQL Models & Repositories
-├── security.py              # 🛡️  Security Framework & Middleware
-├── monitoring.py            # 📊 Prometheus Metrics & Health Checks
-├── performance_simple.py    # ⚡ Caching & Query Optimization
-├── error_handling.py        # 🚨 Error Management & Logging
-├── file_storage.py          # 📁 File Operations & Storage
-├── service_discovery.py     # 🔍 Service Registry Integration
-├── Dockerfile.database      # 🐳 Container Configuration
-├── requirements_fixed.txt   # 📦 Production Dependencies
-├── requirements_test.txt    # 🧪 Test Dependencies
-├── run_tests.py            # 🎯 Test Runner Script
-├── pytest.ini             # ⚙️  Test Configuration
-└── tests/                  # 🧪 Comprehensive Test Suite
-    ├── conftest.py         # Test fixtures and configuration
-    ├── unit/              # Unit tests (4 files)
-    ├── integration/       # Integration tests (2 files)
-    └── security/          # Security tests (4 files)
+photo-share-consul/
+├── services/photoshare/           # 🚀 Main Application
+│   ├── main_database.py          # FastAPI app entry point
+│   ├── database.py               # PostgreSQL models & repositories
+│   ├── security.py               # Security framework (rate limiting, validation)
+│   ├── monitoring.py             # Prometheus metrics integration
+│   ├── performance_simple.py     # Caching & optimization  
+│   ├── error_handling.py         # Error management
+│   ├── file_storage.py          # File operations
+│   ├── service_discovery.py      # Service registry integration
+│   ├── requirements_fixed.txt    # Production dependencies
+│   └── requirements_test.txt     # Testing dependencies
+│
+├── tests/                        # 🧪 Testing Suite
+│   ├── env/                      # UV-managed Python 3.11.9 environment
+│   ├── scripts/                  # Test orchestration scripts
+│   ├── unit/                     # Unit tests
+│   ├── integration/              # Integration tests (4 types)
+│   ├── security/                 # Security compliance tests  
+│   ├── performance/              # Load and performance tests
+│   ├── api/                      # API endpoint validation
+│   ├── e2e/                      # End-to-end user journey tests
+│   ├── infrastructure/           # Container and deployment tests
+│   ├── reports/                  # Test execution reports
+│   ├── coverage/                 # Code coverage reports
+│   └── security_reports/         # Security compliance reports
+│
+├── scripts/                      # 🔧 Utility Scripts
+│   ├── api-tests/               # Shell-based API testing
+│   ├── generate-jwt-secrets.py  # Security key generation
+│   ├── validate-config.py       # Configuration validation
+│   └── deploy-production.sh     # Production deployment
+│
+├── docker-compose.yml           # 🐳 Service orchestration
+├── .env.example                 # Environment configuration template
+├── tests/.env.test             # Testing environment configuration
+└── CLAUDE.md                   # Development guidance
 ```
 
-### Module Responsibilities
+## 🚀 Core Application Architecture
 
-#### 🚀 **main_database.py** - Application Core
-- **Purpose**: FastAPI application entry point and route definitions
-- **Key Features**:
-  - FastAPI app initialization and middleware setup
-  - User management endpoints (register, login, profile)
-  - Photo management endpoints (upload, download, listing)
-  - Platform monitoring endpoints (stats, health, metrics)
-  - JWT authentication and authorization
-  - Request validation and error handling
-  - Service startup and shutdown management
+### FastAPI Service Layer (`services/photoshare/`)
 
-#### 🗄️ **database.py** - Data Layer
-- **Purpose**: PostgreSQL integration with async SQLAlchemy
-- **Key Components**:
-  - SQLAlchemy models (User, Photo, Session)
-  - Repository pattern for data access
-  - Database connection management
-  - Query optimization and indexing
-  - Transaction handling
-  - Database health checks
+#### Application Entry Point
+**File**: `main_database.py`
+- FastAPI application initialization
+- Middleware configuration (CORS, security, monitoring)
+- Route registration and API documentation
+- Health check endpoints
+- Prometheus metrics integration
 
-#### 🛡️ **security.py** - Security Framework
-- **Purpose**: Comprehensive security implementation
-- **Security Features**:
-  - Rate limiting middleware
-  - Input validation and sanitization
-  - JWT token management and validation
-  - File upload security scanning
-  - Security audit logging
-  - CORS configuration
-  - Request validation middleware
+#### Data Layer  
+**File**: `database.py`
+- **Models**: User, Photo, Session, Role, Permission (RBAC)
+- **Repositories**: UserRepository, PhotoRepository, SessionRepository
+- **Database**: PostgreSQL with async SQLAlchemy ORM
+- **Features**: Email verification, JWT session management
 
-#### 📊 **monitoring.py** - Observability
-- **Purpose**: Metrics collection and health monitoring
-- **Monitoring Capabilities**:
-  - Prometheus metrics export
-  - Request/response metrics
-  - Database performance metrics
-  - Cache analytics
-  - Error tracking and alerting
-  - Health check endpoints
+#### Security Framework
+**File**: `security.py`
+- **Rate Limiting**: Advanced rate limiting with multiple strategies
+- **Input Validation**: Email validation, password strength, file security
+- **JWT Security**: Token management and revocation
+- **Security Audit**: Event logging and monitoring
+- **OWASP Compliance**: Security headers, input sanitization
 
-#### ⚡ **performance_simple.py** - Performance Optimization
-- **Purpose**: Application performance and caching
-- **Performance Features**:
-  - Memory-based caching system
-  - Query result caching
-  - Cache analytics and hit rates
-  - Performance benchmarking
-  - Query optimization recommendations
-  - Cache warming strategies
+#### Performance Optimization  
+**File**: `performance_simple.py`
+- **Memory Caching**: High-performance in-memory cache manager
+- **Query Optimization**: Database query monitoring and optimization
+- **Resource Management**: Memory usage tracking and optimization
+- **Performance Analytics**: Cache hit rates, query performance metrics
 
-#### 🚨 **error_handling.py** - Error Management
-- **Purpose**: Centralized error handling and logging
-- **Error Handling Features**:
-  - Structured error responses
-  - Error categorization and logging
-  - Performance monitoring integration
-  - Database error handling
-  - Authentication error handling
-  - File storage error handling
+#### Monitoring & Observability
+**File**: `monitoring.py`  
+- **Prometheus Integration**: Request metrics, database metrics, error tracking
+- **Monitoring Middleware**: Automatic request/response monitoring
+- **Health Dashboards**: System status and performance dashboards
+- **Alerting**: Performance threshold monitoring
 
-#### 📁 **file_storage.py** - File Management
-- **Purpose**: File operations and storage management
-- **Storage Features**:
-  - Local file storage with organization
-  - File upload validation and processing
-  - Storage health checks
-  - File retrieval and streaming
-  - Platform storage integration support
-  - File cleanup and management
+### API Endpoints
 
-#### 🔍 **service_discovery.py** - Service Integration
-- **Purpose**: Service registry and discovery
-- **Integration Features**:
-  - Service registration and discovery
-  - Health check coordination
-  - External service integration
-  - Service status monitoring
-  - Registry management
-
----
-
-## 🗄️ Database Schema
-
-### Entity Relationship Diagram
-
+#### Core Endpoints
 ```
-┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
-│     USERS       │       │     PHOTOS      │       │    SESSIONS     │
-├─────────────────┤       ├─────────────────┤       ├─────────────────┤
-│ id (PK)         │───┐   │ id (PK)         │   ┌───│ id (PK)         │
-│ email (UNIQUE)  │   └──▶│ user_id (FK)    │   │   │ user_id (FK)    │
-│ password_hash   │       │ filename        │   │   │ token (UNIQUE)  │
-│ created_at      │       │ original_filename│   │   │ created_at      │
-│ updated_at      │       │ content_type    │   │   │ expires_at      │
-│ is_verified     │       │ file_size       │   │   │ is_active       │
-│ is_active       │       │ storage_path    │   │   └─────────────────┘
-└─────────────────┘       │ title           │   │
-                          │ description     │   │
-                          │ is_public       │   │
-                          │ created_at      │   │
-                          │ updated_at      │   │
-                          └─────────────────┘   │
-                                   │            │
-                                   └────────────┘
+GET  /health                     # Service health check
+GET  /api/                      # API information  
+GET  /docs                      # Swagger documentation
+GET  /metrics                   # Prometheus metrics
 ```
 
-### Database Tables
+#### User Management
+```
+POST /api/users/register        # User registration (creates unverified user)
+POST /api/users/request-verification  # Request email verification  
+GET  /api/users/verify/{secret} # Email verification with secret link
+POST /api/users/login           # User login (returns JWT)
+GET  /api/users/me             # Current user info (requires auth)
+```
 
-#### Users Table
+#### Photo Management  
+```
+POST /api/photos/upload         # Upload photo (requires auth)
+GET  /api/photos/              # List user's photos (requires auth)
+GET  /api/photos/public        # List public photos
+GET  /api/photos/{id}          # Get photo metadata
+GET  /api/photos/{id}/download # Download photo file
+GET  /api/photos/{id}/url      # Get photo URLs
+```
+
+#### Platform & Monitoring
+```
+GET  /api/platform/stats       # Service statistics
+GET  /api/platform/security    # Security status  
+GET  /api/platform/performance # Performance metrics
+```
+
+## 🗄️ Database Architecture
+
+### PostgreSQL Schema
+
+#### Core Tables
 ```sql
-CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    is_verified BOOLEAN DEFAULT FALSE,
-    is_active BOOLEAN DEFAULT TRUE,
-    
-    -- Indexes
-    INDEX idx_users_email (email),
-    INDEX idx_users_active (is_active)
-);
+-- User Management
+users (id, email, password_hash, is_verified, is_active, created_at)
+email_verifications (id, email, secret, created_at, expires_at)
+sessions (id, user_id, token, is_active, created_at, expires_at)
+
+-- Photo Management  
+photos (id, user_id, filename, content_type, file_size, title, description, is_public)
+
+-- RBAC (Role-Based Access Control)
+roles (id, name, description, is_active)
+permissions (id, name, resource, action, description)  
+role_permissions (id, role_id, permission_id)
+user_roles (id, user_id, role_id)
 ```
 
-#### Photos Table
-```sql
-CREATE TABLE photos (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    filename VARCHAR(255) NOT NULL,
-    original_filename VARCHAR(255) NOT NULL,
-    content_type VARCHAR(100) NOT NULL,
-    file_size INTEGER NOT NULL,
-    storage_path VARCHAR(500) NOT NULL,
-    title VARCHAR(255),
-    description TEXT,
-    is_public BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    -- Indexes
-    INDEX idx_photos_user_id (user_id),
-    INDEX idx_photos_public (is_public),
-    INDEX idx_photos_created (created_at DESC),
-    INDEX idx_photos_user_public (user_id, is_public)
-);
-```
+#### Repository Pattern
+- **UserRepository**: User CRUD, authentication, verification
+- **PhotoRepository**: Photo CRUD, public/private photo management  
+- **SessionRepository**: JWT session management, token validation
+- **EmailVerificationRepository**: Email verification workflow
+- **RoleRepository**: RBAC role management
 
-#### Sessions Table
-```sql
-CREATE TABLE sessions (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    token VARCHAR(255) UNIQUE NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    expires_at TIMESTAMP WITH TIME ZONE,
-    is_active BOOLEAN DEFAULT TRUE,
-    
-    -- Indexes
-    INDEX idx_sessions_token (token),
-    INDEX idx_sessions_user_id (user_id),
-    INDEX idx_sessions_active (is_active),
-    INDEX idx_sessions_expires (expires_at)
-);
-```
-
-### Database Optimization Features
-
-- **Connection Pooling**: AsyncPG with connection pooling for optimal performance
-- **Query Optimization**: Strategic indexing and optimized queries
-- **Transaction Management**: Proper transaction boundaries for data integrity
-- **Caching Layer**: Query result caching to reduce database load
-- **Health Monitoring**: Database connectivity and performance monitoring
-
----
-
-## 🔐 Authentication & Authorization Flow
-
-### JWT Authentication Flow
-
-```mermaid
-sequenceDiagram
-    participant Client
-    participant API
-    participant Database
-    participant JWT
-    
-    Note over Client,JWT: User Registration Flow
-    Client->>API: POST /api/users/register
-    API->>API: Validate email & password
-    API->>Database: Check email uniqueness
-    API->>API: Hash password (bcrypt)
-    API->>Database: Create user record
-    Database->>API: Return user data
-    API->>Client: Return user info (no password)
-    
-    Note over Client,JWT: User Login Flow
-    Client->>API: POST /api/users/login
-    API->>Database: Get user by email
-    API->>API: Verify password hash
-    API->>JWT: Generate JWT token
-    API->>Database: Store session record
-    API->>Client: Return JWT token + user info
-    
-    Note over Client,JWT: Authenticated Request Flow
-    Client->>API: Request with Authorization: Bearer <token>
-    API->>JWT: Validate JWT token
-    JWT->>API: Extract user ID from token
-    API->>Database: Get current user data
-    API->>API: Process authorized request
-    API->>Client: Return response
-```
-
-### Authentication Components
-
-#### 1. **Password Security**
-```python
-# Password hashing with bcrypt
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-# Strong password validation
-- Minimum 8 characters
-- Must contain uppercase, lowercase, numbers
-- Special characters recommended
-```
-
-#### 2. **JWT Token Management**
-```python
-# JWT Configuration
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-
-# Token payload structure
-{
-    "sub": str(user_id),
-    "email": user_email,
-    "iat": issued_at_timestamp,
-    "exp": expiration_timestamp
-}
-```
-
-#### 3. **Session Tracking**
-- All login sessions stored in database
-- Token validation with revocation support
-- Session expiration management
-- Active session monitoring
-
-#### 4. **Security Middleware**
-- Rate limiting per IP and user
-- Request validation and sanitization
-- CORS protection
-- Security headers enforcement
-
----
-
-## ⚡ Performance Architecture
-
-### Caching Strategy
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Client        │    │  FastAPI App    │    │   PostgreSQL    │
-│   Request       │───▶│                 │───▶│   Database      │
-└─────────────────┘    │  ┌───────────┐  │    └─────────────────┘
-                       │  │  Memory   │  │             ▲
-                       │  │  Cache    │  │             │
-                       │  │  Layer    │  │    ┌─────────────────┐
-                       │  └───────────┘  │    │     Redis       │
-                       │                 │    │  (Future/Optional)
-                       └─────────────────┘    └─────────────────┘
-```
-
-### Performance Features
-
-#### 1. **Memory Caching**
-- Query result caching for frequently accessed data
-- User photos caching with TTL
-- Public photos caching
-- Platform statistics caching
-- Cache analytics and hit rate monitoring
-
-#### 2. **Query Optimization**
-- Strategic database indexing
-- Optimized SQL queries with SQLAlchemy
-- Connection pooling for database efficiency
-- Lazy loading for related data
-
-#### 3. **Async Operations**
-- Full async/await pattern implementation
-- Non-blocking database operations
-- Concurrent request handling
-- Async file operations
-
-#### 4. **Performance Monitoring**
-- Request latency tracking
-- Database query performance metrics
-- Cache hit rates and efficiency
-- Memory usage monitoring
-
----
-
-## 📊 Monitoring & Observability
-
-### Metrics Architecture
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│  FastAPI App    │    │   Prometheus    │    │    Grafana      │
-│                 │───▶│    Metrics      │───▶│   Dashboard     │
-│ Custom Metrics  │    │   Collection    │    │ Visualization   │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │
-         ▼
-┌─────────────────┐
-│   Application   │
-│   Logs          │
-└─────────────────┘
-```
-
-### Monitoring Components
-
-#### 1. **Health Checks**
-- Basic health endpoint (`/health`)
-- Detailed health with authentication (`/health/detailed`)
-- Database connectivity monitoring
-- File storage health verification
-
-#### 2. **Prometheus Metrics** (`/metrics`)
-- HTTP request metrics (duration, count, status codes)
-- Database operation metrics
-- Cache performance metrics
-- Authentication metrics
-- Error tracking metrics
-
-#### 3. **Platform Monitoring**
-- Service statistics (`/api/platform/stats`)
-- Performance analytics (`/api/platform/performance`)
-- Security monitoring (`/api/platform/security`)
-- Error analysis (`/api/platform/errors`)
-
-#### 4. **Real-time Analytics**
-- Request/response tracking
-- User activity monitoring
-- Photo upload/download statistics
-- Cache analytics and optimization recommendations
-
----
+### Database Features
+- **Async Operations**: All database operations use async SQLAlchemy
+- **Connection Pooling**: Production-grade connection management
+- **Query Optimization**: Monitored and optimized database queries
+- **Migration Support**: Alembic database migrations
+- **Test Isolation**: Separate test database with SQLite for unit tests
 
 ## 🧪 Testing Architecture
 
-### Test Structure Overview
+### Test Framework
 
-```
-tests/
-├── conftest.py              # 🏗️ Test Configuration & Fixtures
-├── unit/                    # 🔬 Unit Tests (4 files)
-│   ├── test_basic.py        # Basic setup and imports
-│   ├── test_database.py     # Database models and repositories
-│   ├── test_performance.py  # Performance components
-│   └── test_security.py     # Security components
-├── integration/             # 🔗 Integration Tests (2 files)
-│   ├── test_api_auth.py     # Authentication API endpoints
-│   └── test_api_photos.py   # Photo management API endpoints
-└── security/                # 🛡️ Security Tests (4 files)
-    ├── test_owasp_compliance.py    # OWASP Top 10 compliance
-    ├── test_penetration_testing.py # Penetration testing
-    ├── test_gdpr_compliance.py     # GDPR compliance
-    └── test_fuzz_testing.py        # Fuzz testing
-```
+#### Test Categories
+| Category | Purpose | Implementation |
+|----------|---------|---------------|
+| **Unit Tests** | Core component testing | Individual function/class testing |
+| **Integration Tests** | Service interaction testing | 4 integration approaches |
+| **Security Tests** | Security validation | OWASP, GDPR compliance |  
+| **Performance Tests** | Load and performance validation | Benchmarking and stress testing |
+| **API Tests** | Endpoint validation | API contract and response testing |
+| **E2E Tests** | User journey validation | Complete workflow testing |
+| **Infrastructure** | Container testing | Docker and deployment validation |
 
-### Test Categories Explained
+#### Testing Environment
+- **Python Environment**: UV-managed Python 3.11.9  
+- **Test Isolation**: Separate test database and configuration
+- **Mock Services**: External service mocking for reliable testing
+- **Coverage Reporting**: HTML, XML, and terminal coverage reports
+- **CI/CD Ready**: Automated test execution for continuous integration
 
-#### 🔬 **Unit Tests**
-- **Scope**: Individual components and functions
-- **Purpose**: Verify core functionality in isolation
-- **Coverage**: Database models, security functions, caching, error handling
-- **Execution**: Fast (< 1 second per test)
-- **Dependencies**: Mocked external services
+#### Integration Test Types
 
-#### 🔗 **Integration Tests**
-- **Scope**: API endpoints and service integration
-- **Purpose**: Verify complete request/response cycles
-- **Coverage**: Authentication flow, photo management, API contracts
-- **Execution**: Medium speed (1-5 seconds per test)
-- **Dependencies**: Test database, mocked file storage
+##### 1. Mock-Based Integration Tests
+- Mocked database operations for fast execution
+- Complete API endpoint coverage  
+- Error handling validation
 
-#### 🛡️ **Security Tests**
-- **Scope**: Security controls and compliance
-- **Purpose**: Verify security measures and regulatory compliance
-- **Coverage**: OWASP Top 10, GDPR, penetration testing, fuzz testing
-- **Execution**: Slow (5+ seconds per test)
-- **Dependencies**: Full application stack
+##### 2. Component Integration Tests  
+- Individual service component testing
+- Real database operations with SQLite in-memory
+- Security, file storage, monitoring integration
 
-### Test Execution Framework
+##### 3. Contract Testing
+- API contract validation framework
+- Response schema compliance  
+- Backward compatibility testing
 
-#### **Test Runner** (`run_tests.py`)
-```bash
-# Run all tests with coverage
-python3 run_tests.py all --verbose
+##### 4. Full Integration Tests
+- End-to-end workflows with real databases
+- Complete user registration → verification → photo management
+- Concurrent operations testing
 
-# Run specific test categories
-python3 run_tests.py unit          # Fast unit tests
-python3 run_tests.py integration   # API integration tests  
-python3 run_tests.py security      # Comprehensive security tests
-python3 run_tests.py performance   # Performance benchmarks
+## 🔒 Security Architecture
 
-# Install dependencies and run tests
-python3 run_tests.py all --install-deps --verbose
-```
+### Multi-Layer Security
 
-#### **Test Configuration** (`pytest.ini`)
-- Async test mode enabled
-- Coverage reporting (80% minimum)
-- HTML and XML coverage reports
-- Strict marker and configuration enforcement
-- Multiple output formats (terminal, HTML, XML)
+#### Authentication & Authorization
+- **JWT Authentication**: Secure token-based authentication
+- **Email Verification**: Required email verification with 24-hour expiration
+- **Session Management**: JWT session tracking with invalidation
+- **Role-Based Access Control (RBAC)**: Flexible permission system
 
-#### **Test Fixtures** (`conftest.py`)
-- Database session management with in-memory SQLite
-- User and photo test data factories
-- Authentication header generation
-- Mock file storage services
-- Test client configuration
+#### Security Middleware
+- **Rate Limiting**: Advanced rate limiting with IP blocking
+- **Input Validation**: Comprehensive input sanitization
+- **CORS Configuration**: Secure cross-origin request handling
+- **Security Headers**: OWASP-compliant security headers
 
-### Test Plan Integration
+#### File Security  
+- **Upload Validation**: File type, size, and content validation
+- **Malware Scanning**: File content security scanning
+- **Secure Storage**: Isolated file storage with access controls
 
-The comprehensive [TEST_PLAN.md](TEST_PLAN.md) provides:
+#### Security Testing
+- **OWASP Compliance**: OWASP Top 10 vulnerability testing
+- **GDPR Compliance**: Data protection compliance validation
+- **Penetration Testing**: Automated security testing
+- **SSL/TLS**: Certificate generation and validation
 
-1. **Quick Validation Tests** (5-10 minutes)
-   - Health checks and API availability
-   - Authentication flow validation
-   - Photo upload/download functionality
+## 🚀 Performance Architecture
 
-2. **Manual API Testing**
-   - Complete user registration, email verification, and login flow
-   - Photo management operations
-   - Security validation tests
-   - Performance benchmarking
+### Caching Strategy
+- **Memory Caching**: High-performance in-memory cache
+- **Redis Fallback**: Optional Redis integration for scaling  
+- **Cache Analytics**: Cache hit rates and performance monitoring
+- **Query Caching**: Database query result caching
 
-3. **Automated Test Suite**
-   - Unit, integration, and security test execution
-   - Coverage reporting and analysis
-   - Performance benchmarking
-   - Continuous integration support
+### Performance Optimization
+- **Async Operations**: Fully asynchronous request handling
+- **Database Optimization**: Query monitoring and optimization
+- **Resource Management**: Memory and CPU usage tracking
+- **Performance Monitoring**: Real-time performance metrics
 
----
+### Scalability Design
+- **Connection Pooling**: Database connection optimization
+- **Horizontal Scaling**: Service can be horizontally scaled
+- **Load Testing**: Performance validation under load
+- **Resource Monitoring**: System resource tracking
 
-## 🚀 Deployment Architecture
+## 📊 Monitoring & Observability  
 
-### Container Architecture
+### Prometheus Integration
+- **Request Metrics**: HTTP request tracking and timing
+- **Database Metrics**: Query performance and connection monitoring  
+- **Business Metrics**: User registration, photo uploads
+- **Error Metrics**: Error rates and types tracking
+- **Infrastructure Metrics**: System resources and health
 
-```dockerfile
-# Multi-stage Docker build
-FROM python:3.11-slim as base
-# Dependency installation
-FROM base as dependencies
-# Application layer
-FROM dependencies as application
-```
+### Health Monitoring
+- **Health Checks**: Comprehensive service health validation
+- **Dependency Monitoring**: Database, Redis, external service health
+- **Performance Dashboards**: Real-time system status
+- **Alerting**: Performance threshold alerts
 
-### Service Orchestration (Docker Compose)
+### Logging & Diagnostics
+- **Structured Logging**: JSON-formatted application logs
+- **Error Tracking**: Detailed error logging and tracking  
+- **Performance Profiling**: Application performance analysis
+- **Audit Logging**: Security event logging
 
+## 🐳 Deployment Architecture
+
+### Docker Configuration
 ```yaml
 services:
-  photo-share-platform:     # Main FastAPI application
-    build: services/photoshare
-    ports: ["8080:8000"]
-    depends_on: [platform-db, platform-cache]
-    
-  platform-db:              # PostgreSQL database
-    image: postgres:15-alpine
-    ports: ["5432:5432"]
-    
-  platform-cache:           # Redis cache (optional)
-    image: redis:7-alpine
-    ports: ["6379:6379"]
-    
-  platform-prometheus:      # Metrics collection
-    image: prom/prometheus
-    ports: ["9090:9090"]
-    
-  platform-grafana:         # Metrics visualization
-    image: grafana/grafana
-    ports: ["3000:3000"]
+  backend:          # Main FastAPI application
+  db:              # PostgreSQL database  
+  redis:           # Redis cache (optional)
+  prometheus:      # Metrics collection
+  grafana:         # Monitoring dashboards
 ```
 
-### Production Deployment Considerations
+### Environment Management
+- **Development**: `.env` with development configurations
+- **Testing**: `tests/.env.test` with test-specific settings
+- **Production**: `.env` with production security configurations
 
-1. **Security**
-   - SSL/TLS termination
-   - Secure JWT secret management
-   - Environment variable security
-   - Database connection security
+### Service Integration  
+- **Platform Services**: Integration with external platform services
+- **Service Discovery**: Consul integration for service registry
+- **Load Balancing**: Ready for load balancer integration
+- **Health Checks**: Docker health check integration
 
-2. **Scalability**
-   - Horizontal scaling support
-   - Database connection pooling
-   - Load balancer configuration
-   - Cache optimization
+## 🔧 Development Workflow
 
-3. **Monitoring**
-   - Log aggregation
-   - Metrics collection
-   - Alert configuration
-   - Health check monitoring
+### Setup & Development
+```bash
+# Environment setup
+cp .env.example .env
+python3 scripts/generate-jwt-secrets.py --update-env .env
+docker compose up --build
 
-4. **Backup & Recovery**
-   - Database backup strategy
-   - File storage backup
-   - Disaster recovery procedures
-   - Data retention policies
+# Testing
+python3 tests/scripts/run_tests_uv.py
+bash scripts/api-tests/test-auth-flow.sh
 
----
+# Security validation  
+python3 tests/scripts/run_security_compliance.py --generate-certificates
+```
 
-## 🔗 Integration Points
+### Code Quality
+- **Code Coverage**: Comprehensive coverage requirement with detailed reporting
+- **Static Analysis**: Type checking, linting, security scanning
+- **Security Compliance**: OWASP and GDPR compliance testing
+- **Performance Testing**: Load testing and benchmarking
 
-### External Service Integration
+## 📈 Production Readiness
 
-1. **File Storage Integration**
-   - Local file storage (primary)
-   - Cloud storage adapters (AWS S3, Google Cloud, Azure)
-   - Storage health monitoring
-   - File migration support
+### Production Features
+- ✅ **Architecture**: Production-ready single service design
+- ✅ **Security**: Comprehensive security implementation  
+- ✅ **Testing**: Comprehensive test suite across 7 categories
+- ✅ **Monitoring**: Full Prometheus integration
+- ✅ **Performance**: Memory caching and optimization
+- ✅ **Documentation**: Complete operational documentation
 
-2. **Monitoring Integration**
-   - Prometheus metrics export
-   - Grafana dashboard integration
-   - Alert manager compatibility
-   - Log aggregation (ELK stack, Splunk)
+### Production Deployment Ready
+- **JWT Authentication** with email verification
+- **Role-Based Access Control** (RBAC)
+- **File Upload and Management** with security validation
+- **Performance Optimization** with intelligent caching
+- **Comprehensive Monitoring** with Prometheus
+- **Security Compliance** testing (OWASP, GDPR)
+- **Load Testing** and performance validation
 
-3. **Authentication Integration**
-   - OAuth2/OIDC support (future)
-   - LDAP integration (future)
-   - Multi-factor authentication (future)
-   - Session management integration
+### Scalability Considerations
+- **Horizontal Scaling**: Service can be scaled horizontally
+- **Database Scaling**: PostgreSQL read replicas ready
+- **Caching Strategy**: Memory + Redis for high performance  
+- **Load Balancing**: Ready for load balancer integration
 
-4. **API Integration**
-   - RESTful API with OpenAPI/Swagger
-   - JSON response format
-   - Standard HTTP status codes
-   - CORS support for web clients
+## 🎯 Architecture Strengths
 
----
+1. **Simplicity**: Single service eliminates microservice complexity
+2. **Security**: Multi-layer security with comprehensive testing
+3. **Performance**: Async operations with intelligent caching
+4. **Observability**: Full monitoring and metrics integration  
+5. **Testability**: Comprehensive test suite with multiple test types
+6. **Maintainability**: Clean code structure with clear separation of concerns
+7. **Production-Ready**: All components designed for production deployment
 
-## 📋 Development Workflow
-
-### Code Quality Standards
-
-1. **Code Style**
-   - Python PEP 8 compliance
-   - Type hints for function signatures
-   - Async/await patterns for I/O operations
-   - Comprehensive docstrings
-
-2. **Security Standards**
-   - Input validation for all endpoints
-   - SQL injection prevention
-   - XSS protection
-   - CSRF protection
-
-3. **Performance Standards**
-   - Response times < 200ms for simple operations
-   - Database query optimization
-   - Efficient caching strategies
-   - Memory usage optimization
-
-4. **Testing Standards**
-   - 80% minimum code coverage
-   - All API endpoints tested
-   - Security controls validated
-   - Performance benchmarks maintained
-
-### Development Process
-
-1. **Setup**: Follow README.md quick start guide
-2. **Development**: Implement features with comprehensive testing
-3. **Testing**: Run full test suite before commits
-4. **Documentation**: Update architecture docs for significant changes
-5. **Deployment**: Use docker-compose for consistent environments
-
----
-
-## 🔄 Migration and Evolution
-
-### Future Architecture Considerations
-
-1. **Microservices Migration Path**
-   - Service boundary identification
-   - Data migration strategies
-   - API gateway integration
-   - Inter-service communication
-
-2. **Scalability Enhancements**
-   - Database sharding strategies
-   - Caching layer improvements
-   - CDN integration for file serving
-   - Load balancing optimization
-
-3. **Security Enhancements**
-   - Advanced authentication methods
-   - Enhanced audit logging
-   - Compliance framework integration
-   - Security scanning automation
-
-4. **Monitoring Evolution**
-   - Advanced analytics integration
-   - Machine learning for anomaly detection
-   - Custom dashboard development
-   - Real-time alerting improvements
-
----
-
-This architecture document provides a comprehensive overview of the Photo Share Service design, implementation, and operational considerations. The single-service architecture prioritizes simplicity while maintaining production-ready capabilities for security, performance, and monitoring.
-
-For implementation details, refer to the individual module documentation and the comprehensive test plan in [TEST_PLAN.md](TEST_PLAN.md).
+The architecture successfully balances simplicity with enterprise-grade features, providing a robust foundation for a production photo sharing service.
