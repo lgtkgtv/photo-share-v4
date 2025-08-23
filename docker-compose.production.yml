@@ -1,0 +1,240 @@
+version: '3.8'
+
+# PhotoShare Production Deployment Configuration
+# ==============================================
+# 
+# This configuration is optimized for production use with:
+# - Environment-specific settings
+# - Health checks and restart policies
+# - Security configurations
+# - Volume persistence
+# - Network isolation
+# - Resource limits
+
+networks:
+  auth-network:
+    driver: bridge
+    internal: true  # Auth network is isolated
+  app-network:
+    driver: bridge
+  frontend-network:
+    driver: bridge
+
+volumes:
+  auth_postgres_data:
+    driver: local
+  app_postgres_data:
+    driver: local
+  photo_storage:
+    driver: local
+
+services:
+  # Authentication Service
+  auth-service:
+    build: 
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: photoshare-auth-service-prod
+    ports:
+      - "${AUTH_PORT:-8001}:8000"  # Configurable port
+    environment:
+      - ENVIRONMENT=production
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_EXPIRATION_MINUTES=${JWT_EXPIRATION_MINUTES:-30}
+      - JWT_AUDIENCE=${JWT_AUDIENCE:-photoshare-app}
+      - JWT_ISSUER=${JWT_ISSUER:-photoshare-auth}
+      - DB_HOST=auth-db
+      - DB_PORT=5432
+      - DB_NAME=${AUTH_DB_NAME:-photo_share_auth}
+      - DB_USER=${AUTH_DB_USER:-auth_user}
+      - DB_PASSWORD=${AUTH_DB_PASSWORD}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
+      - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    env_file:
+      - .env.production
+    depends_on:
+      auth-db:
+        condition: service_healthy
+    volumes:
+      - ./services/auth-service:/app
+    networks:
+      - auth-network
+      - app-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Authentication Database
+  auth-db:
+    image: postgres:15-alpine
+    container_name: photoshare-auth-db-prod
+    environment:
+      - POSTGRES_USER=${AUTH_DB_USER:-auth_user}
+      - POSTGRES_PASSWORD=${AUTH_DB_PASSWORD}
+      - POSTGRES_DB=${AUTH_DB_NAME:-photo_share_auth}
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+    env_file:
+      - .env.production
+    volumes:
+      - auth_postgres_data:/var/lib/postgresql/data
+      - ./services/auth-service/init-auth-db.sql:/docker-entrypoint-initdb.d/init-auth-db.sql:ro
+    networks:
+      - auth-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AUTH_DB_USER:-auth_user} -d ${AUTH_DB_NAME:-photo_share_auth}"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Photo Sharing App Service  
+  photo-share-app:
+    build:
+      context: ./services/photoshare
+      dockerfile: Dockerfile.production
+    container_name: photoshare-app-service-prod
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    environment:
+      - ENVIRONMENT=production
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_AUDIENCE=${JWT_AUDIENCE:-photoshare-app}
+      - JWT_ISSUER=${JWT_ISSUER:-photoshare-auth}
+      - AUTH_SERVICE_URL=http://auth-service:8000
+      - DB_HOST=app-db
+      - DB_PORT=5432
+      - DB_NAME=${APP_DB_NAME:-photo_share}
+      - DB_USER=${APP_DB_USER:-photo_user}
+      - DB_PASSWORD=${APP_DB_PASSWORD}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
+      - FILE_STORAGE_PATH=${FILE_STORAGE_PATH:-/app/storage}
+      - MAX_FILE_SIZE=${MAX_FILE_SIZE:-10485760}  # 10MB default
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    env_file:
+      - .env.production
+    depends_on:
+      app-db:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    volumes:
+      - ./services/photoshare:/app
+      - photo_storage:/app/storage
+    networks:
+      - app-network
+      - frontend-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # App Database
+  app-db:
+    image: postgres:15-alpine
+    container_name: photoshare-app-db-prod
+    environment:
+      - POSTGRES_USER=${APP_DB_USER:-photo_user}
+      - POSTGRES_PASSWORD=${APP_DB_PASSWORD}
+      - POSTGRES_DB=${APP_DB_NAME:-photo_share}
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+    env_file:
+      - .env.production
+    volumes:
+      - app_postgres_data:/var/lib/postgresql/data
+      - ./services/photoshare/init-app-db.sql:/docker-entrypoint-initdb.d/init-app-db.sql:ro
+    networks:
+      - app-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${APP_DB_USER:-photo_user} -d ${APP_DB_NAME:-photo_share}"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Reverse Proxy / Load Balancer (Optional - for production scaling)
+  nginx:
+    image: nginx:alpine
+    container_name: photoshare-nginx-prod
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./config/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./config/ssl:/etc/nginx/ssl:ro  # SSL certificates
+    depends_on:
+      - photo-share-app
+      - auth-service
+    networks:
+      - frontend-network
+      - app-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.1'
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Redis (Optional - for advanced caching and session management)
+  redis:
+    image: redis:7-alpine
+    container_name: photoshare-redis-prod
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    volumes:
+      - ./data/redis:/data
+    networks:
+      - app-network
+      - auth-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.1'
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

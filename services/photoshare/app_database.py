@@ -411,9 +411,14 @@ class AppDatabaseManager:
     async def health_check(self) -> bool:
         """Check database health."""
         try:
+            if not self.engine:
+                logger.error("Database engine not initialized")
+                return False
+                
             async with self.session_factory() as session:
-                await session.execute("SELECT 1")
-                return True
+                from sqlalchemy import text
+                result = await session.execute(text("SELECT 1"))
+                return result.scalar() == 1
         except Exception as e:
             logger.error(f"Application database health check failed: {e}")
             return False
@@ -426,3 +431,7 @@ class AppDatabaseManager:
 
 # Global application database manager
 app_db_manager = AppDatabaseManager()
+
+def get_app_db_manager() -> AppDatabaseManager:
+    """Get the global application database manager instance."""
+    return app_db_manager

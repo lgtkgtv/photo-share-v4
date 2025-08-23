@@ -25,8 +25,10 @@ class AuthServiceClient:
     def __init__(self):
         self.auth_service_url = os.getenv("AUTH_SERVICE_URL", "http://auth-service:8000")
         self.service_api_key = os.getenv("AUTH_SERVICE_API_KEY", "")
+        self.jwt_secret_key = os.getenv("JWT_SECRET_KEY", "")
         self.jwt_algorithm = os.getenv("JWT_ALGORITHM", "HS256")
         self.jwt_audience = os.getenv("JWT_AUDIENCE", "photoshare-app")
+        self.jwt_issuer = os.getenv("JWT_ISSUER", "photoshare-auth")
         
         # HTTP client for service-to-service communication
         self.http_client = httpx.AsyncClient(
@@ -35,27 +37,25 @@ class AuthServiceClient:
             headers={"X-Service-API-Key": self.service_api_key} if self.service_api_key else {}
         )
         
-        # Cache for JWT public keys and user info
-        self._public_keys_cache = {}
+        # Cache for user info and permissions
         self._user_cache = {}
         self._permissions_cache = {}
         self._cache_ttl = 300  # 5 minutes
         
     async def verify_jwt_token(self, token: str) -> Dict[str, Any]:
-        """Verify JWT token with the authentication service."""
+        """Verify JWT token using shared secret key."""
         try:
-            # First, try to decode without verification to get header info
-            jwt.decode(token, options={"verify_signature": False})
+            if not self.jwt_secret_key:
+                logger.error("JWT_SECRET_KEY not configured")
+                raise HTTPException(status_code=500, detail="JWT configuration error")
             
-            # Get public key for verification
-            public_key = await self._get_public_key()
-            
-            # Verify the token
+            # Verify the token using shared secret
             payload = jwt.decode(
                 token,
-                public_key,
+                self.jwt_secret_key,
                 algorithms=[self.jwt_algorithm],
-                audience=self.jwt_audience
+                audience=self.jwt_audience,
+                issuer=self.jwt_issuer
             )
             
             return payload
@@ -156,36 +156,6 @@ class AuthServiceClient:
             logger.error(f"Failed to invalidate session: {e}")
             return False
             
-    async def _get_public_key(self):
-        """Get JWT public key from authentication service."""
-        public_key_url = os.getenv("JWT_PUBLIC_KEY_URL", f"{self.auth_service_url}/api/auth/public-key")
-        
-        # Check cache
-        if public_key_url in self._public_keys_cache:
-            cached_key, cache_time = self._public_keys_cache[public_key_url]
-            if time.time() - cache_time < 3600:  # Cache for 1 hour
-                return cached_key
-        
-        try:
-            response = await self.http_client.get(public_key_url)
-            response.raise_for_status()
-            
-            key_data = response.json()
-            public_key = key_data.get("public_key")
-            
-            if not public_key:
-                raise ValueError("No public key in response")
-            
-            # Cache the key
-            self._public_keys_cache[public_key_url] = (public_key, time.time())
-            
-            return public_key
-            
-        except Exception as e:
-            logger.error(f"Failed to get public key: {e}")
-            # Fallback: use shared secret (less secure)
-            return os.getenv("JWT_SECRET_KEY", "fallback-key")
-            
     async def health_check(self) -> Dict[str, Any]:
         """Check authentication service health."""
         try:
@@ -201,7 +171,6 @@ class AuthServiceClient:
         """Clear all caches."""
         self._user_cache.clear()
         self._permissions_cache.clear()
-        self._public_keys_cache.clear()
         
     async def close(self):
         """Close HTTP client."""

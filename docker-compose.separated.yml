@@ -1,6 +1,6 @@
 # Docker Compose for Separated Architecture
 # PhotoShare with dedicated authentication service and database separation
-version: '3.8'
+
 
 services:
   # =============================================================================
@@ -40,7 +40,7 @@ services:
       - "5433:5432"  # Auth DB on port 5433
     environment:
       - POSTGRES_USER=auth_user
-      - POSTGRES_PASSWORD=auth_secure_password
+      - POSTGRES_PASSWORD=auth_secure_password_here
       - POSTGRES_DB=photo_share_auth
     volumes:
       - auth_postgres_data:/var/lib/postgresql/data
@@ -93,7 +93,7 @@ services:
       - "5432:5432"  # App DB on port 5432 (default)
     environment:
       - POSTGRES_USER=app_user
-      - POSTGRES_PASSWORD=app_secure_password
+      - POSTGRES_PASSWORD=app_secure_password_here
       - POSTGRES_DB=photo_share_app
     volumes:
       - app_postgres_data:/var/lib/postgresql/data
