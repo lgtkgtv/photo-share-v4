@@ -1,6 +1,5 @@
-# Default Development Environment Configuration
-# Usage: docker compose up --build
-# Purpose: Quick start for local development
+# Development Environment Configuration
+# Usage: docker compose -f docker-compose.dev.yml up --build
 
 services:
   # Photo Share Application Service  
@@ -35,7 +34,7 @@ services:
     networks:
       - photo-share-network
     volumes:
-      - photo_share_data:/var/lib/postgresql/data
+      - photo_share_dev_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d photo_share"]
       interval: 10s
@@ -50,5 +49,5 @@ networks:
     driver: bridge
 
 volumes:
-  photo_share_data:
-    name: photo-share-data
+  photo_share_dev_data:
+    name: photo-share-dev-data

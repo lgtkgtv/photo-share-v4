@@ -1,0 +1,53 @@
+# Testing Environment Configuration
+# Usage: docker compose -f docker-compose.test.yml up --build
+# Purpose: Isolated environment for running unit and integration tests
+
+services:
+  # Photo Share Application for Testing
+  photo-share-test:
+    build:
+      context: .
+      dockerfile: services/photoshare/Dockerfile.database
+    environment:
+      PYTHONPATH: /app
+      ENVIRONMENT: testing
+      DATABASE_URL: postgresql+asyncpg://postgres:testpass@photo-share-test-db:5432/photo_share_test
+      JWT_SECRET_KEY: test-jwt-secret-key-for-testing-only
+      SECRET_KEY: test-secret-key-for-testing-only
+    networks:
+      - photo-share-test-network
+    depends_on:
+      photo-share-test-db:
+        condition: service_healthy
+    profiles:
+      - testing
+
+  # Test Database (separate from development)
+  photo-share-test-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: photo_share_test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: testpass
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    networks:
+      - photo-share-test-network
+    volumes:
+      - photo_share_test_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d photo_share_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    profiles:
+      - testing
+
+networks:
+  photo-share-test-network:
+    name: photo-share-test
+    driver: bridge
+
+volumes:
+  photo_share_test_data:
+    name: photo-share-test-data
