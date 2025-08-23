@@ -1,310 +1,395 @@
-# Photo Share Social Media Platform - Test Suite
+# PhotoShare Test Suite Documentation
+# ====================================
 
-This directory contains the comprehensive test suite for the photo sharing social media platform, covering all implemented features from Phase 1 through Phase 3.
+Comprehensive testing framework for PhotoShare application with proper categorization, coverage tracking, and security compliance testing.
 
-## 📁 Directory Structure
+## 📁 Test Structure
 
 ```
 tests/
-├── README.md                          # This file - test execution guide
-├── conftest.py                        # Global test configuration and fixtures
-├── pytest.ini                        # Pytest configuration
-├── unit/                              # Unit tests
-│   ├── test_basic.py                  # Basic functionality tests
-│   ├── test_database.py               # Database operations
-│   ├── test_security.py               # Security components
-│   └── test_performance.py            # Performance optimization
-├── integration/                       # Integration tests
-│   ├── test_api_auth.py               # Authentication workflows
-│   ├── test_api_photos.py             # Photo management
-│   ├── test_api_social.py             # Social features
-│   ├── test_api_albums.py             # Album management
-│   ├── test_api_profiles.py           # User profiles
-│   ├── test_api_notifications.py      # Notification system
-│   ├── test_api_sharing.py            # Photo sharing
-│   └── test_production_readiness.py   # Production features
-├── security/                          # Security tests
-│   ├── test_owasp_compliance.py       # OWASP Top 10
-│   ├── test_gdpr_compliance.py        # GDPR compliance
-│   ├── test_fuzz_testing.py           # Fuzzing tests
-│   └── test_penetration_testing.py    # Penetration tests
-├── api/                              # API endpoint tests
-│   ├── test_auth_flow.py              # Authentication API
-│   ├── test_photo_upload.py           # Photo upload API
-│   ├── test_social_features.py        # Social API
-│   ├── test_album_management.py       # Album API
-│   ├── test_notification_system.py    # Notification API
-│   └── test_sharing_system.py         # Sharing API
-└── scripts/                          # Test automation
-    └── run_all_tests.py               # Master test runner
+├── conftest.py                    # Global test configuration and fixtures
+├── pytest.ini                    # Pytest configuration and coverage settings
+├── run_tests.py                  # Unified test runner with coverage
+├── run_security_tests.py         # Dedicated security test runner
+├── README.md                     # This documentation
+│
+├── unit/                         # Unit tests for individual components
+│   ├── auth-service/             # Auth service unit tests
+│   ├── photoshare/              # Photo service unit tests  
+│   └── shared/                  # Shared utilities unit tests
+│
+├── integration/                  # Service-to-service integration tests
+│   ├── test_service_communication.py
+│   ├── test_jwt_validation.py
+│   └── test_separated_architecture.py
+│
+├── functional/                   # End-to-end functional workflow tests
+│   └── test_user_workflows.py
+│
+├── security/                     # Security and compliance testing
+│   ├── test_rbac_security.py
+│   └── test_security_compliance.py
+│
+├── reports/                      # Test reports and results
+│   ├── security/                 # Security test reports
+│   └── [timestamped reports]
+│
+└── coverage/                     # Code coverage reports
+    ├── html/                     # HTML coverage reports
+    ├── coverage.json            # JSON coverage data
+    └── coverage.xml             # XML coverage for CI/CD
 ```
 
-## 🚀 Quick Start
+## 🧪 Test Categories
 
-### Prerequisites
+### Unit Tests
+- **Location**: `tests/unit/`
+- **Purpose**: Test individual components in isolation
+- **Marker**: `@pytest.mark.unit`
+- **Coverage**: Individual functions and classes
 
-1. **Python Environment**: Python 3.8+ with virtual environment
-2. **Dependencies**: Install test dependencies
-   ```bash
-   pip install -r tests/requirements.txt
-   ```
-3. **Service**: Ensure the photo sharing service is running
-   ```bash
-   docker compose up --build
-   ```
+### Integration Tests  
+- **Location**: `tests/integration/`
+- **Purpose**: Test service-to-service communication
+- **Marker**: `@pytest.mark.integration`
+- **Requires**: Running services (auth-service, photo-service)
 
-### Running Tests
+### Functional Tests
+- **Location**: `tests/functional/`
+- **Purpose**: End-to-end user workflow testing
+- **Marker**: `@pytest.mark.functional`
+- **Coverage**: Complete user journeys
 
-#### Quick Test Suite (Recommended for development)
-```bash
-# Run core tests (unit + integration)
-python tests/scripts/run_all_tests.py --quick
+### Security Tests
+- **Location**: `tests/security/`
+- **Purpose**: Security vulnerability and compliance testing
+- **Markers**: `@pytest.mark.security`, `@pytest.mark.security_compliance`
+- **Coverage**: OWASP compliance, RBAC, authentication security
 
-# Or manually
-pytest tests/unit/ tests/integration/ -v
-```
+## 🚀 Running Tests
 
-#### Full Test Suite
+### Quick Start
+
 ```bash
 # Run all tests with coverage
-python tests/scripts/run_all_tests.py
+python tests/run_tests.py
 
-# Or manually
-pytest tests/ --cov=services/photoshare --cov-report=html
+# Run specific test categories
+python tests/run_tests.py --categories unit integration
+
+# Run security tests only
+python tests/run_security_tests.py
+
+# Run quick security check
+python tests/run_security_tests.py --quick
 ```
 
-#### Specific Test Categories
+### Individual Categories
+
 ```bash
 # Unit tests only
-pytest tests/unit/ -v
+pytest tests/unit/ -v -m unit
 
-# Integration tests only  
-pytest tests/integration/ -v
+# Integration tests (requires running services)
+pytest tests/integration/ -v -m integration  
 
-# API tests only
-pytest tests/api/ -v
+# Functional tests (requires running services)
+pytest tests/functional/ -v -m functional
 
-# Security tests only
-pytest tests/security/ -v
+# Security tests
+pytest tests/security/ -v -m security
 
-# Performance tests only
-pytest tests/ -m performance
-
-# Feature-specific tests
-pytest tests/ -m social        # Social media features
-pytest tests/ -m albums        # Album management
-pytest tests/ -m profiles      # User profiles
-pytest tests/ -m notifications # Notifications
-pytest tests/ -m sharing       # Photo sharing
+# Security compliance
+pytest tests/security/ -v -m security_compliance
 ```
 
-## 🎯 Test Categories
+### Coverage Tracking
 
-### Unit Tests (`tests/unit/`)
-Test individual components in isolation:
-- Database models and operations
-- Security utilities (JWT, hashing, validation)
-- Performance optimization components
-- Basic service functionality
+```bash
+# Generate coverage report
+pytest --cov=services --cov-report=html:tests/coverage/html
 
-### Integration Tests (`tests/integration/`)
-Test API endpoints and workflows:
-- Authentication and user management
-- Photo upload and management
-- Social features (likes, comments, follows)
-- Album creation and organization
-- User profile management
-- Notification system
-- Photo sharing functionality
+# View coverage in browser
+open tests/coverage/html/index.html
 
-### API Tests (`tests/api/`)
-Comprehensive API endpoint testing:
-- Complete authentication flows
-- Photo upload and download
-- Social interaction workflows
-- Album management operations
-- Notification delivery and management
-- Secure sharing with tokens and passwords
-
-### Security Tests (`tests/security/`)
-Security-focused validation:
-- OWASP Top 10 compliance
-- GDPR privacy requirements
-- Input validation and sanitization
-- File upload security
-- Authentication and authorization
-
-## 📊 Test Markers
-
-Tests are categorized using pytest markers:
-
-```python
-@pytest.mark.unit          # Unit tests
-@pytest.mark.integration   # Integration tests
-@pytest.mark.security      # Security tests
-@pytest.mark.performance   # Performance tests
-@pytest.mark.auth          # Authentication required
-@pytest.mark.social        # Social media features
-@pytest.mark.albums        # Album management
-@pytest.mark.profiles      # User profiles
-@pytest.mark.notifications # Notification system
-@pytest.mark.sharing       # Photo sharing
-@pytest.mark.slow          # Long-running tests
+# Coverage with specific threshold
+pytest --cov=services --cov-fail-under=70
 ```
 
-## 🔧 Configuration
+## 📊 Test Reports
 
-### Test Environment
-Tests use isolated test configuration:
-- **Database**: In-memory SQLite for fast execution
-- **Authentication**: Test JWT secrets
-- **File Storage**: Mocked file operations
-- **External Services**: Mocked dependencies
+### Automated Reporting
+
+All test runs generate:
+- **HTML Reports**: Detailed test results with pass/fail status
+- **JSON Reports**: Machine-readable test data for CI/CD
+- **Coverage Reports**: Code coverage analysis in HTML/JSON/XML
+- **Security Reports**: Security assessment and compliance status
+
+### Report Locations
+
+- **Test Reports**: `tests/reports/`
+- **Coverage Reports**: `tests/coverage/`
+- **Security Reports**: `tests/reports/security/`
+
+## 🔒 Security Testing
+
+### Security Test Runner
+
+```bash
+# Full security assessment
+python tests/run_security_tests.py
+
+# Quick security check (critical tests only)  
+python tests/run_security_tests.py --quick
+
+# Static analysis only
+python tests/run_security_tests.py --static-only
+```
+
+### Security Test Coverage
+
+- **RBAC Testing**: Role-based access control validation
+- **Authentication Security**: JWT validation, session management
+- **OWASP Compliance**: Top 10 security risk mitigation
+- **Input Validation**: SQL injection, XSS prevention
+- **Authorization**: Permission boundary enforcement
+- **Static Analysis**: Code security scanning with Bandit
+- **Dependency Scanning**: Vulnerability detection with Safety
+
+## 📈 Coverage Tracking
 
 ### Coverage Targets
-- **Overall Coverage**: >90%
-- **Critical Components**: 100% (auth, security)
-- **Feature Components**: >85% (social, albums, profiles)
-- **Performance Components**: >75%
 
-### Test Data
-- **Fixtures**: Defined in `conftest.py`
-- **Sample Data**: Test users, photos, albums
-- **Mock Services**: File storage, external APIs
+- **Overall Coverage**: 70% minimum
+- **Critical Functions**: 80%+ coverage required
+- **Security Functions**: 90%+ coverage required
 
-## 📈 Performance Benchmarks
+### Complex Functions Requiring Attention
 
-Tests validate performance requirements:
-- **API Response Time**: <200ms (95th percentile)
-- **Database Queries**: <50ms (average)
-- **Photo Upload**: <5s per image
-- **Authentication**: <2s login flow
-- **Search Operations**: <100ms
+The following high-complexity functions require comprehensive testing:
 
-## 🐛 Debugging Tests
+1. **AuthenticationService._get_user_roles_and_permissions**
+   - Priority: Critical
+   - Target Coverage: 80%+
+   - Complexity: High
 
-### Verbose Output
-```bash
-pytest tests/ -v -s --tb=long
-```
+2. **AuthenticatedUser.has_permission**
+   - Priority: Critical  
+   - Target Coverage: 90%+
+   - Complexity: Medium
 
-### Specific Test Debugging
-```bash
-# Run single test with debugging
-pytest tests/unit/test_basic.py::TestBasicSetup::test_environment_setup -v -s
+3. **AuthenticationService._assign_default_role**
+   - Priority: High
+   - Target Coverage: 85%+
+   - Complexity: Medium
 
-# Run with pdb debugging
-pytest tests/ --pdb
-```
+4. **upload_photo (main.py)**
+   - Priority: Critical
+   - Target Coverage: 75%+
+   - Complexity: High
 
-### Coverage Analysis
-```bash
-# Generate HTML coverage report
-pytest tests/ --cov=services/photoshare --cov-report=html
+## ⚙️ Configuration
 
-# View report
-open tests/coverage_html/index.html
-```
+### Pytest Configuration
 
-## 🔄 Continuous Integration
+Configuration is managed in `tests/pytest.ini`:
+- Test discovery patterns
+- Coverage settings and thresholds
+- Test markers and categorization
+- Report generation options
 
-### Pre-commit Tests (Fast - ~2 minutes)
-```bash
-pytest tests/unit/ -v --tb=short
-pytest tests/integration/test_api_auth.py -v
-```
+### Test Fixtures
 
-### Pull Request Tests (Comprehensive - ~15 minutes)
-```bash
-python tests/scripts/run_all_tests.py --types unit integration api security
-```
+Global fixtures in `tests/conftest.py`:
+- Service availability checking
+- Authentication helpers
+- Test data generation
+- Mock services for unit testing
 
-### Nightly Tests (Full Suite - ~45 minutes)
-```bash
-python tests/scripts/run_all_tests.py --types all
-pytest tests/ --cov=services/photoshare --cov-fail-under=90
-```
+## 🎯 Test Markers
 
-## 📝 Test Development Guidelines
+Use markers to categorize and run specific test types:
 
-### Writing New Tests
-
-1. **Follow Naming Convention**: `test_<feature>_<scenario>.py`
-2. **Use Appropriate Markers**: Mark tests with relevant pytest markers
-3. **Leverage Fixtures**: Use existing fixtures from `conftest.py`
-4. **Test Both Success and Failure**: Include positive and negative test cases
-5. **Performance Awareness**: Add performance assertions for critical paths
-
-### Test Structure
 ```python
+@pytest.mark.unit
+def test_individual_function():
+    pass
+
 @pytest.mark.integration
-@pytest.mark.social
-class TestSocialFeatures:
-    """Test social media functionality."""
+@pytest.mark.requires_auth
+def test_service_communication():
+    pass
+
+@pytest.mark.security
+@pytest.mark.rbac
+def test_permission_enforcement():
+    pass
+
+@pytest.mark.functional
+@pytest.mark.slow
+def test_complete_workflow():
+    pass
+```
+
+### Available Markers
+
+- `unit` - Unit tests
+- `integration` - Integration tests
+- `functional` - Functional tests
+- `security` - Security tests
+- `security_compliance` - Compliance tests
+- `slow` - Long-running tests
+- `network` - Tests requiring network access
+- `database` - Tests requiring database
+- `auth` - Authentication-related tests
+- `rbac` - Role-based access control tests
+- `photos` - Photo functionality tests
+- `performance` - Performance tests
+
+## 📋 Prerequisites
+
+### For All Tests
+```bash
+pip install pytest pytest-cov pytest-html pytest-json-report requests PyJWT Pillow
+```
+
+### For Security Tests
+```bash
+pip install bandit safety semgrep
+```
+
+### For Integration/Functional Tests
+
+Services must be running:
+```bash
+# Start services
+docker compose -f docker-compose.separated.yml up -d
+
+# Verify services
+curl http://localhost:8001/health
+curl http://localhost:8000/health
+```
+
+## 🔧 CI/CD Integration
+
+### GitHub Actions Example
+
+```yaml
+- name: Run PhotoShare Test Suite
+  run: |
+    python tests/run_tests.py --categories unit integration functional
     
-    async def test_like_photo_workflow(self, async_test_client, auth_headers, test_photo):
-        """Test complete like/unlike workflow."""
+- name: Run Security Tests
+  run: |
+    python tests/run_security_tests.py --quick
+    
+- name: Upload Coverage Reports
+  uses: codecov/codecov-action@v3
+  with:
+    files: tests/coverage/coverage.xml
+```
+
+### Coverage Reporting
+
+Generated reports support popular CI/CD platforms:
+- **Codecov**: XML coverage reports
+- **Coveralls**: JSON coverage data
+- **SonarQube**: XML and JSON reports
+- **GitHub Actions**: HTML reports as artifacts
+
+## 📝 Writing New Tests
+
+### Test File Naming
+
+- Unit tests: `test_component_name.py`
+- Integration tests: `test_service_integration.py`
+- Functional tests: `test_workflow_name.py`
+- Security tests: `test_security_aspect.py`
+
+### Test Function Naming
+
+```python
+def test_function_behavior():          # Unit test
+def test_service_communication():      # Integration test
+def test_user_registration_workflow(): # Functional test
+def test_rbac_permission_enforcement(): # Security test
+```
+
+### Test Structure Template
+
+```python
+import pytest
+
+class TestComponentName:
+    """Test suite for ComponentName functionality."""
+    
+    @pytest.mark.unit
+    def test_basic_functionality(self):
+        """Test basic component behavior."""
+        # Arrange
+        input_data = "test"
+        
+        # Act
+        result = component_function(input_data)
+        
+        # Assert
+        assert result == expected_output
+    
+    @pytest.mark.integration
+    @pytest.mark.requires_auth
+    def test_service_integration(self, auth_headers):
+        """Test integration with external services."""
         # Test implementation
         pass
 ```
-
-### Assertion Guidelines
-- Use descriptive assertion messages
-- Test specific error conditions
-- Verify response structure and content
-- Include performance assertions where relevant
 
 ## 🚨 Troubleshooting
 
 ### Common Issues
 
-**Test Database Connection**
+1. **Services Not Running**
+   ```
+   Error: Required services not available
+   Solution: Start services with docker compose
+   ```
+
+2. **Coverage Below Threshold**
+   ```
+   Error: Coverage 65% is below 70% threshold
+   Solution: Add tests for uncovered functions
+   ```
+
+3. **Security Test Failures**
+   ```
+   Error: Critical security test failed
+   Solution: Review security implementation
+   ```
+
+### Debug Commands
+
 ```bash
-# Ensure test environment variables are set
-export ENVIRONMENT=test
-export JWT_SECRET_KEY=test-secret-key
+# Check service health
+curl http://localhost:8001/health
+curl http://localhost:8000/health
+
+# Run single test with verbose output
+pytest tests/path/to/test.py::test_name -v -s
+
+# Run tests without coverage (faster)
+pytest tests/ --no-cov
+
+# Clean test cache
+pytest --cache-clear
 ```
 
-**Import Errors**
-```bash
-# Add project root to Python path
-export PYTHONPATH="${PYTHONPATH}:$(pwd)"
-```
+## 📖 Further Reading
 
-**Service Not Running**
-```bash
-# Start the photo sharing service
-docker compose up --build
-```
-
-### Environment Reset
-```bash
-# Clean test artifacts
-rm -rf tests/coverage_html/
-rm -f tests/coverage.xml
-rm -f tests/.coverage
-
-# Reset test database
-docker compose down -v
-docker compose up --build
-```
-
-## 📚 Related Documentation
-
-- **[Comprehensive Test Plan](../COMPREHENSIVE_TEST_PLAN.md)**: Detailed testing strategy
-- **[CLAUDE.md](../CLAUDE.md)**: Development guidance and project overview
-- **[API Documentation](http://localhost:8000/docs)**: Interactive API documentation
-- **[Service Configuration](../services/photoshare/)**: Service implementation details
-
-## 🎉 Success Metrics
-
-The test suite validates:
-- ✅ **100% Core Functionality**: Authentication, photo management, security
-- ✅ **90%+ Feature Coverage**: Social features, albums, profiles, notifications, sharing
-- ✅ **Security Compliance**: OWASP Top 10, GDPR requirements
-- ✅ **Performance Standards**: Response times, throughput, scalability
-- ✅ **Production Readiness**: Error handling, monitoring, logging
+- [Pytest Documentation](https://docs.pytest.org/)
+- [Coverage.py Documentation](https://coverage.readthedocs.io/)
+- [OWASP Testing Guide](https://owasp.org/www-project-web-security-testing-guide/)
+- [Python Security Best Practices](https://bandit.readthedocs.io/)
 
 ---
 
-*This test suite ensures the photo sharing social media platform meets enterprise-grade quality, security, and performance standards.*
+**Note**: This test suite is designed to ensure PhotoShare meets production-quality standards for functionality, security, and reliability. All tests should pass before deployment to production environments.

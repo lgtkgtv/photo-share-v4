@@ -1,16 +1,27 @@
 #!/usr/bin/env python3
 """
-Test configuration and fixtures for the separated architecture.
+PhotoShare Test Configuration
+=============================
+
+Global test configuration, fixtures, and setup for PhotoShare test suite.
+Provides common utilities and test data for all test categories.
 """
 import os
 import pytest
 import asyncio
+import sys
+from pathlib import Path
 from typing import AsyncGenerator
 from unittest.mock import Mock, AsyncMock, patch
 
+# Add project root to Python path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
 # Set test environment variables
 os.environ["ENVIRONMENT"] = "test"
-os.environ["JWT_SECRET_KEY"] = "test-secret-key-for-testing-only"
+os.environ["TESTING"] = "1"
+os.environ["JWT_SECRET_KEY"] = "your-very-secure-jwt-secret-key-minimum-256-bits"
 os.environ["AUTH_DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
 os.environ["APP_DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
 os.environ["TWOFA_ENCRYPTION_KEY"] = "4SimbvVNZ3lFGeJLcn1y0pBOCXgVrwmaMGHY1VvyxMs="
@@ -22,6 +33,77 @@ os.environ["GOOGLE_CLIENT_ID"] = "test_google_id"
 os.environ["GOOGLE_CLIENT_SECRET"] = "test_google_secret"
 os.environ["STORAGE_PATH"] = "/tmp/test_storage"
 os.environ["MAX_FILE_SIZE"] = "10485760"
+
+
+# Test configuration
+@pytest.fixture(scope="session")
+def test_config():
+    """Provide test configuration settings."""
+    return {
+        "auth_service_url": "http://localhost:8001",
+        "app_service_url": "http://localhost:8000", 
+        "jwt_secret": "your-very-secure-jwt-secret-key-minimum-256-bits",
+        "test_timeout": 30,
+        "database_timeout": 10
+    }
+
+
+# Service availability check
+@pytest.fixture(scope="session")
+def check_services():
+    """Check that required services are running before tests."""
+    import requests
+    
+    services = {
+        "Auth Service": "http://localhost:8001/health",
+        "App Service": "http://localhost:8000/health"
+    }
+    
+    failed_services = []
+    
+    for service_name, url in services.items():
+        try:
+            response = requests.get(url, timeout=5)
+            if response.status_code != 200:
+                failed_services.append(f"{service_name} (HTTP {response.status_code})")
+        except Exception as e:
+            failed_services.append(f"{service_name} ({str(e)})")
+    
+    if failed_services:
+        pytest.skip(f"Required services not available: {', '.join(failed_services)}")
+    
+    return True
+
+
+# Complex functions requiring coverage attention
+COMPLEX_FUNCTIONS = {
+    "services.auth-service.auth_service.AuthenticationService._get_user_roles_and_permissions": {
+        "min_coverage": 80,
+        "complexity": "high",
+        "priority": "critical"
+    },
+    "services.photoshare.auth_integration.AuthenticatedUser.has_permission": {
+        "min_coverage": 90,
+        "complexity": "medium", 
+        "priority": "critical"
+    },
+    "services.auth-service.auth_service.AuthenticationService._assign_default_role": {
+        "min_coverage": 85,
+        "complexity": "medium",
+        "priority": "high"
+    },
+    "services.photoshare.main.upload_photo": {
+        "min_coverage": 75,
+        "complexity": "high",
+        "priority": "critical"
+    }
+}
+
+
+@pytest.fixture(scope="session")
+def complex_functions():
+    """Provide list of complex functions that need testing attention."""
+    return COMPLEX_FUNCTIONS
 
 @pytest.fixture(scope="session")
 def event_loop():
