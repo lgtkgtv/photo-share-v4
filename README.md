@@ -10,6 +10,16 @@
 
 PhotoShare is a **production-ready photo sharing platform** built with separated microservices architecture, featuring enterprise-grade security, scalability, and comprehensive documentation.
 
+### optional - cleanup all docker to start from a known good state
+
+```bash
+docker rm -f $(docker ps -aq)
+docker rmi -f $(docker images -aq)
+docker volume rm $(docker volume ls -q)
+docker network rm $(docker network ls -q)
+docker system prune -a --volumes -f
+```
+
 ### ⚡ 5-Minute Setup
 
 ```bash
