@@ -20,7 +20,7 @@ class MockAsyncContextManager:
 # Mock the database module before importing
 with patch.dict('os.environ', {'APP_DATABASE_URL': 'sqlite+aiosqlite:///:memory:'}):
     from services.photoshare.app_database import (
-        Photo, Album, AlbumPhoto, PhotoShare, PhotoTag, PhotoComment,
+        Photo, Media, Album, AlbumPhoto, PhotoShare, PhotoTag, PhotoComment,
         PhotoAnalytics, UserPreference, AppDatabaseManager
     )
 
@@ -298,6 +298,216 @@ class TestUserPreferenceModel:
         assert user_pref.preferences == preferences
         assert user_pref.preferences["theme"] == "dark"
         assert user_pref.preferences["notifications"]["email"] is True
+
+
+class TestMediaModel:
+    """Test Media model (unified photo/video model)."""
+    
+    def test_media_photo_creation(self):
+        """Test media creation for photo."""
+        media = Media(
+            user_uuid="test-user-uuid",
+            user_email="test@example.com",
+            filename="test_photo.jpg",
+            original_filename="my_photo.jpg", 
+            content_type="image/jpeg",
+            file_size=1024,
+            storage_path="/storage/test_photo.jpg",
+            title="Test Photo",
+            description="A test photo",
+            is_public=True,
+            media_type="photo"
+        )
+        
+        assert media.user_uuid == "test-user-uuid"
+        assert media.user_email == "test@example.com"
+        assert media.filename == "test_photo.jpg"
+        assert media.original_filename == "my_photo.jpg"
+        assert media.content_type == "image/jpeg"
+        assert media.file_size == 1024
+        assert media.storage_path == "/storage/test_photo.jpg"
+        assert media.title == "Test Photo"
+        assert media.description == "A test photo"
+        assert media.is_public is True
+        assert media.media_type == "photo"
+        # Video-specific fields should be None for photos
+        assert media.duration is None
+        assert media.video_codec is None
+        assert media.audio_codec is None
+    
+    def test_media_video_creation(self):
+        """Test media creation for video."""
+        media = Media(
+            user_uuid="test-user-uuid",
+            user_email="test@example.com",
+            filename="test_video.mp4",
+            original_filename="my_video.mp4",
+            content_type="video/mp4", 
+            file_size=10485760,  # 10MB
+            storage_path="/storage/test_video.mp4",
+            title="Test Video",
+            description="A test video",
+            is_public=False,
+            media_type="video",
+            duration=120,  # 2 minutes
+            width=1920,
+            height=1080,
+            video_codec="h264",
+            audio_codec="aac",
+            framerate=30.0
+        )
+        
+        assert media.user_uuid == "test-user-uuid"
+        assert media.user_email == "test@example.com"
+        assert media.filename == "test_video.mp4"
+        assert media.content_type == "video/mp4"
+        assert media.file_size == 10485760
+        assert media.storage_path == "/storage/test_video.mp4"
+        assert media.media_type == "video"
+        assert media.duration == 120
+        assert media.width == 1920
+        assert media.height == 1080
+        assert media.video_codec == "h264"
+        assert media.audio_codec == "aac"
+        assert media.framerate == 30.0
+    
+    def test_media_to_dict_photo(self):
+        """Test photo media serialization to dictionary."""
+        created_at = datetime.now(timezone.utc)
+        
+        media = Media(
+            id=1,
+            user_uuid="test-user-uuid",
+            user_email="test@example.com",
+            filename="test_photo.jpg",
+            original_filename="test_photo.jpg",
+            content_type="image/jpeg",
+            file_size=1024,
+            storage_path="/storage/test_photo.jpg",
+            title="Test Photo",
+            is_public=True,
+            media_type="photo",
+            created_at=created_at
+        )
+        
+        media_dict = media.to_dict()
+        
+        assert media_dict["id"] == 1
+        assert media_dict["user_uuid"] == "test-user-uuid"
+        assert media_dict["filename"] == "test_photo.jpg"
+        assert media_dict["content_type"] == "image/jpeg"
+        assert media_dict["media_type"] == "photo"
+        assert media_dict["is_public"] is True
+        assert "duration" not in media_dict or media_dict["duration"] is None
+    
+    def test_media_to_dict_video(self):
+        """Test video media serialization to dictionary."""
+        created_at = datetime.now(timezone.utc)
+        
+        media = Media(
+            id=2,
+            user_uuid="test-user-uuid",
+            user_email="test@example.com",
+            filename="test_video.mp4",
+            original_filename="test_video.mp4",
+            content_type="video/mp4",
+            file_size=5242880,
+            storage_path="/storage/test_video.mp4",
+            title="Test Video",
+            media_type="video",
+            duration=90,
+            width=1280,
+            height=720,
+            video_codec="h264",
+            created_at=created_at
+        )
+        
+        media_dict = media.to_dict()
+        
+        assert media_dict["id"] == 2
+        assert media_dict["media_type"] == "video"
+        assert media_dict["duration"] == 90
+        assert media_dict["width"] == 1280
+        assert media_dict["height"] == 720
+        assert media_dict["video_codec"] == "h264"
+    
+    def test_media_is_video_property(self):
+        """Test is_video property."""
+        photo_media = Media(
+            user_uuid="test-user", 
+            user_email="test@example.com",
+            filename="photo.jpg", 
+            original_filename="photo.jpg",
+            content_type="image/jpeg",
+            file_size=1024,
+            storage_path="/storage/photo.jpg",
+            media_type="photo"
+        )
+        video_media = Media(
+            user_uuid="test-user", 
+            user_email="test@example.com",
+            filename="video.mp4", 
+            original_filename="video.mp4",
+            content_type="video/mp4",
+            file_size=1024,
+            storage_path="/storage/video.mp4",
+            media_type="video"
+        )
+        
+        assert photo_media.is_video is False
+        assert video_media.is_video is True
+    
+    def test_media_is_photo_property(self):
+        """Test is_photo property."""
+        photo_media = Media(
+            user_uuid="test-user", 
+            user_email="test@example.com",
+            filename="photo.jpg", 
+            original_filename="photo.jpg",
+            content_type="image/jpeg",
+            file_size=1024,
+            storage_path="/storage/photo.jpg",
+            media_type="photo"
+        )
+        video_media = Media(
+            user_uuid="test-user", 
+            user_email="test@example.com",
+            filename="video.mp4", 
+            original_filename="video.mp4",
+            content_type="video/mp4",
+            file_size=1024,
+            storage_path="/storage/video.mp4",
+            media_type="video"
+        )
+        
+        assert photo_media.is_photo is True
+        assert video_media.is_photo is False
+        
+    def test_media_to_dict_includes_video_fields(self):
+        """Test that video media dict includes video-specific fields."""
+        video_media = Media(
+            user_uuid="test-user",
+            user_email="test@example.com", 
+            filename="video.mp4",
+            original_filename="video.mp4",
+            content_type="video/mp4",
+            file_size=1024,
+            storage_path="/storage/video.mp4",
+            media_type="video",
+            duration=120,
+            width=1920,
+            height=1080,
+            video_codec="h264"
+        )
+        
+        media_dict = video_media.to_dict()
+        
+        # Should include video-specific fields
+        assert "duration" in media_dict
+        assert "video_codec" in media_dict  
+        assert "stream_url" in media_dict
+        assert media_dict["stream_url"] == f"/api/media/{video_media.id}/stream"
+
 
 class TestAppDatabaseManager:
     """Test Application Database Manager."""

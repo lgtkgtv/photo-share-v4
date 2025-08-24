@@ -13,22 +13,37 @@ import uuid
 import secrets
 import logging
 import time
+import re
+import tempfile
+from pathlib import Path
 from contextlib import asynccontextmanager
-from typing import Optional
-from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File, Form, Query, Request
+from typing import Optional, BinaryIO
+from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File, Form, Query, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, Response
 from sqlalchemy import select
 import uvicorn
 
 # Import service components
-from app_database import AppDatabaseManager, get_app_db_manager, Photo
-from auth_integration import AuthServiceClient, get_current_user, AuthenticatedUser
+from app_database import AppDatabaseManager, get_app_db_manager, Photo, Media
+from auth_integration import AuthServiceClient, get_current_user, get_optional_user, AuthenticatedUser
 from file_storage import FileStorageService
 from waf_protection import waf_middleware, validate_file_upload_waf, waf
 from security_monitoring import security_monitor, log_security_event, AlertSeverity, ThreatType
 from exif_security import sanitize_uploaded_image, analyze_image_privacy_risks, exif_processor
+
+# Import video processing components
+try:
+    from video_processing import VideoProcessor, VideoSecurityValidator
+    VIDEO_PROCESSING_AVAILABLE = True
+    video_processor = VideoProcessor()
+    video_security = VideoSecurityValidator()
+except ImportError:
+    VIDEO_PROCESSING_AVAILABLE = False
+    video_processor = None
+    video_security = None
+
 try:
     from jwt_security import jwt_secret_manager
     JWT_SECURITY_AVAILABLE = True
@@ -369,6 +384,45 @@ async def health_check():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}")
+
+# API information endpoint
+@app.get("/api/")
+async def api_info():
+    """Get API information and available endpoints."""
+    return {
+        "name": "PhotoShare API",
+        "version": "2.3.0-monitoring",
+        "description": "Production-ready photo sharing service with video support",
+        "features": [
+            "Photo upload and management",
+            "Video upload and streaming", 
+            "User authentication and authorization",
+            "Security monitoring and audit trails",
+            "Advanced media processing"
+        ],
+        "endpoints": {
+            "health": "/health",
+            "docs": "/docs", 
+            "openapi": "/openapi.json",
+            "auth": {
+                "register": "POST /api/users/register (via auth-service)",
+                "login": "POST /api/users/login (via auth-service)",
+                "me": "GET /api/users/me"
+            },
+            "media": {
+                "upload": "POST /api/media/upload",
+                "stream": "GET /api/media/{id}/stream",
+                "thumbnail": "GET /api/media/{id}/thumbnail", 
+                "metadata": "GET /api/media/{id}"
+            },
+            "photos": {
+                "list": "GET /api/photos/",
+                "public": "GET /api/photos/public",
+                "details": "GET /api/photos/{id}",
+                "upload": "POST /api/photos/upload"
+            }
+        }
+    }
 
 # Security Monitoring Endpoints
 @app.get("/api/security/dashboard")
@@ -1940,7 +1994,634 @@ async def get_user_profile(user_uuid: str, current_user: AuthenticatedUser = Dep
             "public_profile": True
         }
 
-# Photo endpoints
+# Media endpoints (Photos and Videos)
+@app.post("/api/media/upload")
+async def upload_media(
+    file: UploadFile = File(...),
+    title: str = Form(...),
+    description: str = Form(""),
+    is_public: bool = Form(False),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    app_db: AppDatabaseManager = Depends(get_app_db_manager)
+):
+    """
+    Upload media file (photo or video).
+    
+    Supports:
+    - Photos: JPEG, PNG, GIF, WebP (max 50MB)
+    - Videos: MP4, AVI, MOV, WebM, MKV (max 500MB)
+    """
+    
+    # Verify user has permission to upload media
+    if not current_user.has_permission("photos", "create"):
+        detail = "No permission to upload media. "
+        if not current_user.roles:
+            detail += "User has no roles assigned - this indicates a system configuration issue. Contact administrator."
+        elif not current_user.permissions:
+            detail += "User roles have no permissions - this indicates a system configuration issue. Contact administrator."
+        else:
+            detail += f"Available permissions: {', '.join(current_user.permissions)}"
+        raise HTTPException(status_code=403, detail=detail)
+    
+    # Filename validation
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Filename is required")
+    
+    # Determine media type
+    is_video = file.content_type and file.content_type.startswith("video/")
+    is_image = file.content_type and file.content_type.startswith("image/")
+    
+    if not is_video and not is_image:
+        raise HTTPException(status_code=400, detail="File must be an image or video")
+    
+    media_type = 'video' if is_video else 'photo'
+    
+    # Size validation
+    max_size = 500 * 1024 * 1024 if is_video else 50 * 1024 * 1024  # 500MB for video, 50MB for photo
+    if file.size and file.size > max_size:
+        max_size_mb = max_size // (1024 * 1024)
+        raise HTTPException(status_code=400, detail=f"File too large (max {max_size_mb}MB for {media_type})")
+    
+    try:
+        # Read file content
+        file_content = await file.read()
+        
+        if len(file_content) == 0:
+            raise HTTPException(status_code=400, detail="Empty file")
+        
+        # WAF file upload validation
+        validate_file_upload_waf(file.filename, file_content)
+        
+        # Save to temporary file for processing
+        temp_file = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file.filename).suffix) as temp_file:
+                temp_file.write(file_content)
+                temp_file_path = temp_file.name
+            
+            if is_video:
+                # Process video upload
+                return await process_video_upload(
+                    temp_file_path=temp_file_path,
+                    file=file,
+                    file_content=file_content,
+                    title=title,
+                    description=description,
+                    is_public=is_public,
+                    current_user=current_user,
+                    app_db=app_db
+                )
+            else:
+                # Process photo upload (existing logic)
+                return await process_photo_upload(
+                    file=file,
+                    file_content=file_content,
+                    title=title,
+                    description=description,
+                    is_public=is_public,
+                    current_user=current_user,
+                    app_db=app_db
+                )
+        finally:
+            # Clean up temp file
+            if temp_file_path and os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Media upload failed: {e}")
+        
+        # Log security event
+        log_security_event(
+            severity=AlertSeverity.MEDIUM,
+            threat_type=ThreatType.UPLOAD_SECURITY,
+            source_ip=getattr(current_user, 'source_ip', 'unknown'),
+            endpoint="/api/media/upload",
+            method="POST",
+            description=f"Media upload failed: {str(e)}",
+            details={
+                "filename": file.filename,
+                "media_type": media_type,
+                "user_id": current_user.user_id
+            },
+            user_id=current_user.user_id
+        )
+        
+        raise HTTPException(status_code=500, detail="Media upload failed")
+
+async def process_video_upload(
+    temp_file_path: str,
+    file: UploadFile,
+    file_content: bytes,
+    title: str,
+    description: str,
+    is_public: bool,
+    current_user: AuthenticatedUser,
+    app_db: AppDatabaseManager
+):
+    """Process video upload with security validation and thumbnail generation."""
+    
+    if not VIDEO_PROCESSING_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Video processing not available")
+    
+    try:
+        # 1. Analyze video metadata
+        logger.info(f"Analyzing video: {file.filename}")
+        video_metadata = await video_processor.analyze_video(temp_file_path)
+        
+        # 2. Security validation
+        is_safe, security_message = await video_security.validate_video_security(
+            temp_file_path, video_metadata
+        )
+        
+        if not is_safe:
+            logger.warning(f"Video security validation failed: {security_message}")
+            raise HTTPException(status_code=400, detail=security_message)
+        
+        # 3. Generate unique filename
+        file_extension = Path(file.filename).suffix.lower()
+        unique_filename = f"{uuid.uuid4()}{file_extension}"
+        
+        # 4. Store video file
+        file_storage = FileStorageService()
+        storage_path = await file_storage.store_file(file_content, unique_filename)
+        
+        # 5. Generate thumbnail
+        thumbnail_filename = f"{uuid.uuid4()}_thumb.jpg"
+        thumbnail_temp_path = f"/tmp/{thumbnail_filename}"
+        
+        # Extract thumbnail at 10% of video duration (or 1 second minimum)
+        thumbnail_timestamp = max(1.0, video_metadata.get('duration', 10) * 0.1)
+        thumbnail_success = await video_processor.generate_thumbnail(
+            temp_file_path, 
+            thumbnail_temp_path,
+            timestamp=thumbnail_timestamp,
+            width=640,
+            height=480
+        )
+        
+        thumbnail_storage_path = None
+        if thumbnail_success and os.path.exists(thumbnail_temp_path):
+            with open(thumbnail_temp_path, 'rb') as thumb_file:
+                thumbnail_content = thumb_file.read()
+            thumbnail_storage_path = await file_storage.store_file(
+                thumbnail_content, thumbnail_filename
+            )
+            os.remove(thumbnail_temp_path)
+        
+        # 6. Create media record
+        media_record = Media(
+            user_uuid=current_user.user_uuid,
+            user_email=current_user.email,
+            filename=unique_filename,
+            original_filename=file.filename,
+            content_type=file.content_type,
+            file_size=len(file_content),
+            storage_path=storage_path,
+            media_type='video',
+            title=title,
+            description=description,
+            is_public=is_public,
+            duration=int(video_metadata.get('duration', 0)),
+            video_codec=video_metadata.get('video_codec'),
+            audio_codec=video_metadata.get('audio_codec'),
+            resolution=video_metadata.get('resolution'),
+            framerate=video_metadata.get('framerate'),
+            bitrate=video_metadata.get('bitrate'),
+            width=video_metadata.get('width'),
+            height=video_metadata.get('height'),
+            thumbnail_path=thumbnail_storage_path,
+            processing_status='completed'
+        )
+        
+        # 7. Save to database
+        async with app_db.get_session() as session:
+            session.add(media_record)
+            await session.commit()
+            await session.refresh(media_record)
+        
+        # 8. Log audit event
+        if AUDIT_TRAIL_AVAILABLE:
+            await log_audit(
+                action="video_upload",
+                resource_type="media",
+                resource_id=str(media_record.id),
+                user_id=current_user.user_uuid,
+                source_ip=getattr(current_user, 'source_ip', 'unknown'),
+                endpoint="/api/media/upload",
+                details={
+                    "filename": file.filename,
+                    "duration": video_metadata.get('duration'),
+                    "resolution": video_metadata.get('resolution'),
+                    "file_size": len(file_content),
+                    "video_codec": video_metadata.get('video_codec')
+                },
+                risk_level="LOW"
+            )
+        
+        # 9. Get video info summary
+        video_info = await video_processor.get_video_info_summary(temp_file_path)
+        
+        return {
+            "id": media_record.id,
+            "message": "Video uploaded successfully",
+            "media_type": "video",
+            "duration": video_metadata.get('duration'),
+            "resolution": video_metadata.get('resolution'),
+            "thumbnail_available": thumbnail_success,
+            "processing_status": "completed",
+            "video_info": video_info,
+            "urls": {
+                "stream": f"/api/media/{media_record.id}/stream",
+                "thumbnail": f"/api/media/{media_record.id}/thumbnail" if thumbnail_success else None,
+                "metadata": f"/api/media/{media_record.id}"
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Video processing error: {e}")
+        raise HTTPException(status_code=500, detail=f"Video processing failed: {str(e)}")
+
+async def process_photo_upload(
+    file: UploadFile,
+    file_content: bytes,
+    title: str,
+    description: str,
+    is_public: bool,
+    current_user: AuthenticatedUser,
+    app_db: AppDatabaseManager
+):
+    """Process photo upload (existing logic refactored)."""
+    
+    # Enhanced upload security validation
+    if UPLOAD_SECURITY_AVAILABLE:
+        logger.info(f"Running enhanced security validation for upload: {file.filename}")
+        
+        validation_result = validate_upload_security(
+            filename=file.filename,
+            file_content=file_content,
+            user_id=current_user.user_id,
+            source_ip=getattr(current_user, 'source_ip', 'unknown')
+        )
+        
+        # Check if file is safe to process
+        if not validation_result.is_safe:
+            # Log security threats
+            for threat in validation_result.threats:
+                log_security_event(
+                    severity=threat.severity,
+                    threat_type="upload_threat",
+                    source_ip=getattr(current_user, 'source_ip', 'unknown'),
+                    endpoint="/api/media/upload",
+                    method="POST",
+                    description=f"Upload security threat: {threat.description}",
+                    details={
+                        "filename": file.filename,
+                        "user_id": current_user.user_id,
+                        "threat_type": threat.threat_type,
+                        "confidence": threat.confidence
+                    },
+                    user_id=current_user.user_id
+                )
+            
+            # Block critical/high severity threats
+            critical_threats = [t for t in validation_result.threats if t.severity in ['CRITICAL', 'HIGH']]
+            if critical_threats:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"File upload blocked: {', '.join([t.description for t in critical_threats[:3]])}"
+                )
+    
+    # EXIF Security Processing
+    logger.info(f"Processing EXIF data for uploaded image: {file.filename}")
+    
+    # Analyze privacy risks
+    privacy_risks = analyze_image_privacy_risks(file_content)
+    
+    # Log security event if sensitive data found
+    if privacy_risks['privacy_risk_level'] in ['HIGH', 'CRITICAL']:
+        log_security_event(
+            severity="MEDIUM",
+            threat_type="anomalous_behavior",
+            source_ip="user_upload",
+            endpoint="/api/media/upload",
+            method="POST",
+            description=f"Sensitive EXIF data found: {privacy_risks['privacy_risk_level']}",
+            details={
+                "filename": file.filename,
+                "user_id": current_user.user_id,
+                "privacy_risks": privacy_risks
+            },
+            user_id=current_user.user_id
+        )
+    
+    # Sanitize image based on sharing preference
+    sanitized_content, sanitization_report = sanitize_uploaded_image(
+        file_content,
+        public_sharing=is_public
+    )
+    
+    # Use sanitized content for storage
+    file_content = sanitized_content
+    
+    # Generate unique filename
+    file_extension = Path(file.filename).suffix.lower()
+    unique_filename = f"{uuid.uuid4()}{file_extension}"
+    
+    # Store file
+    file_storage = FileStorageService()
+    storage_path = await file_storage.store_file(file_content, unique_filename)
+    
+    # Create media record
+    media_record = Media(
+        user_uuid=current_user.user_uuid,
+        user_email=current_user.email,
+        filename=unique_filename,
+        original_filename=file.filename,
+        content_type=file.content_type,
+        file_size=len(file_content),
+        storage_path=storage_path,
+        media_type='photo',
+        title=title,
+        description=description,
+        is_public=is_public,
+        processing_status='completed'
+    )
+    
+    # Save to database
+    async with app_db.get_session() as session:
+        session.add(media_record)
+        await session.commit()
+        await session.refresh(media_record)
+    
+    # Log audit event
+    if AUDIT_TRAIL_AVAILABLE:
+        await log_audit(
+            action="photo_upload",
+            resource_type="media",
+            resource_id=str(media_record.id),
+            user_id=current_user.user_uuid,
+            source_ip=getattr(current_user, 'source_ip', 'unknown'),
+            endpoint="/api/media/upload",
+            details={
+                "filename": file.filename,
+                "file_size": len(file_content),
+                "exif_sanitized": True,
+                "privacy_risk_level": privacy_risks.get('privacy_risk_level')
+            },
+            risk_level="LOW"
+        )
+    
+    return {
+        "id": media_record.id,
+        "message": "Photo uploaded successfully",
+        "media_type": "photo",
+        "processing_status": "completed",
+        "privacy_analysis": privacy_risks,
+        "sanitization_report": sanitization_report,
+        "urls": {
+            "download": f"/api/media/{media_record.id}/download",
+            "metadata": f"/api/media/{media_record.id}"
+        }
+    }
+
+
+# =============================================================================
+# VIDEO SUPPORT ENDPOINTS
+# =============================================================================
+# The following endpoints provide comprehensive video support including:
+# - Unified media upload (photos + videos) with security validation
+# - Video streaming with HTTP range request support for progressive loading
+# - Video thumbnail generation and serving
+# - Enhanced metadata retrieval with video-specific information
+# 
+# Video Security Features:
+# - File format validation and codec allowlisting
+# - Content scanning for malicious patterns
+# - Size, duration, and resolution limits
+# - Integration with existing security monitoring
+# =============================================================================
+
+# Video streaming endpoint with range request support
+@app.get("/api/media/{media_id}/stream")
+async def stream_media(
+    media_id: int,
+    request: Request,
+    app_db: AppDatabaseManager = Depends(get_app_db_manager),
+    current_user: Optional[AuthenticatedUser] = Depends(get_optional_user)
+):
+    """Stream video content with range request support for progressive loading."""
+    
+    try:
+        # Get media record
+        media_record = await app_db.get_media_by_id(media_id)
+        if not media_record:
+            raise HTTPException(status_code=404, detail="Media not found")
+        
+        # Check if it's a video file
+        if media_record.media_type != 'video':
+            raise HTTPException(status_code=400, detail="Media is not a video file")
+        
+        # Permission check
+        if not media_record.is_public:
+            if not current_user or media_record.user_id != current_user.user_id:
+                raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Construct file path
+        file_path = os.path.join(UPLOAD_DIR, media_record.filename)
+        if not os.path.exists(file_path):
+            logger.error(f"Video file not found on disk: {file_path}")
+            raise HTTPException(status_code=404, detail="Video file not found")
+        
+        file_size = os.path.getsize(file_path)
+        
+        # Handle range requests for video streaming
+        range_header = request.headers.get("Range")
+        if range_header:
+            # Parse range header (format: "bytes=start-end")
+            range_match = re.match(r'bytes=(\d+)-(\d*)', range_header)
+            if range_match:
+                start = int(range_match.group(1))
+                end = int(range_match.group(2)) if range_match.group(2) else file_size - 1
+                
+                # Validate range
+                if start >= file_size or end >= file_size or start > end:
+                    return Response(
+                        status_code=416,
+                        headers={"Content-Range": f"bytes */{file_size}"}
+                    )
+                
+                # Read requested chunk
+                with open(file_path, 'rb') as f:
+                    f.seek(start)
+                    chunk_size = end - start + 1
+                    data = f.read(chunk_size)
+                
+                # Log streaming access
+                logger.info(f"Streaming video chunk: media_id={media_id}, range={start}-{end}, user_id={current_user.user_id if current_user else None}")
+                
+                return Response(
+                    content=data,
+                    status_code=206,
+                    headers={
+                        "Content-Range": f"bytes {start}-{end}/{file_size}",
+                        "Accept-Ranges": "bytes",
+                        "Content-Length": str(chunk_size),
+                        "Content-Type": media_record.content_type
+                    }
+                )
+        
+        # Return full file if no range request
+        logger.info(f"Streaming full video: media_id={media_id}, user_id={current_user.user_id if current_user else None}")
+        
+        return FileResponse(
+            path=file_path,
+            media_type=media_record.content_type,
+            headers={
+                "Accept-Ranges": "bytes",
+                "Content-Length": str(file_size)
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Video streaming error: {e}")
+        raise HTTPException(status_code=500, detail="Video streaming failed")
+
+
+# Media thumbnail endpoint
+@app.get("/api/media/{media_id}/thumbnail")
+async def get_media_thumbnail(
+    media_id: int,
+    request: Request,
+    app_db: AppDatabaseManager = Depends(get_app_db_manager),
+    current_user: Optional[AuthenticatedUser] = Depends(get_optional_user)
+):
+    """Get thumbnail for media (photo or video)."""
+    
+    try:
+        # Get media record
+        media_record = await app_db.get_media_by_id(media_id)
+        if not media_record:
+            raise HTTPException(status_code=404, detail="Media not found")
+        
+        # Permission check
+        if not media_record.is_public:
+            if not current_user or media_record.user_id != current_user.user_id:
+                raise HTTPException(status_code=403, detail="Access denied")
+        
+        # For videos, look for generated thumbnail
+        if media_record.media_type == 'video':
+            thumbnail_filename = f"thumb_{os.path.splitext(media_record.filename)[0]}.jpg"
+            thumbnail_path = os.path.join(UPLOAD_DIR, "thumbnails", thumbnail_filename)
+            
+            if not os.path.exists(thumbnail_path):
+                # Try to generate thumbnail if it doesn't exist
+                if VIDEO_PROCESSOR_AVAILABLE:
+                    original_path = os.path.join(UPLOAD_DIR, media_record.filename)
+                    if os.path.exists(original_path):
+                        os.makedirs(os.path.dirname(thumbnail_path), exist_ok=True)
+                        success = await video_processor.generate_thumbnail(
+                            original_path, thumbnail_path, timestamp=1.0
+                        )
+                        if not success:
+                            raise HTTPException(status_code=404, detail="Could not generate video thumbnail")
+                    else:
+                        raise HTTPException(status_code=404, detail="Original video file not found")
+                else:
+                    raise HTTPException(status_code=404, detail="Video thumbnail not available")
+            
+            logger.info(f"Serving video thumbnail: media_id={media_id}, user_id={current_user.user_id if current_user else None}")
+            return FileResponse(path=thumbnail_path, media_type="image/jpeg")
+        
+        # For photos, return the original image (could add thumbnail generation later)
+        else:
+            file_path = os.path.join(UPLOAD_DIR, media_record.filename)
+            if not os.path.exists(file_path):
+                raise HTTPException(status_code=404, detail="Photo file not found")
+            
+            logger.info(f"Serving photo: media_id={media_id}, user_id={current_user.user_id if current_user else None}")
+            return FileResponse(path=file_path, media_type=media_record.content_type)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Thumbnail retrieval error: {e}")
+        raise HTTPException(status_code=500, detail="Thumbnail retrieval failed")
+
+
+# Enhanced media metadata endpoint
+@app.get("/api/media/{media_id}")
+async def get_media_metadata(
+    media_id: int,
+    request: Request,
+    app_db: AppDatabaseManager = Depends(get_app_db_manager),
+    current_user: Optional[AuthenticatedUser] = Depends(get_optional_user)
+):
+    """Get detailed media metadata including video-specific information."""
+    
+    try:
+        # Get media record
+        media_record = await app_db.get_media_by_id(media_id)
+        if not media_record:
+            raise HTTPException(status_code=404, detail="Media not found")
+        
+        # Permission check
+        if not media_record.is_public:
+            if not current_user or media_record.user_id != current_user.user_id:
+                raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Base metadata
+        metadata = {
+            "id": media_record.id,
+            "title": media_record.title,
+            "description": media_record.description,
+            "media_type": media_record.media_type,
+            "content_type": media_record.content_type,
+            "file_size": media_record.file_size,
+            "created_at": media_record.created_at.isoformat(),
+            "is_public": media_record.is_public,
+            "user_id": media_record.user_id
+        }
+        
+        # Add video-specific metadata
+        if media_record.media_type == 'video' and media_record.duration:
+            metadata.update({
+                "duration": media_record.duration,
+                "width": media_record.width,
+                "height": media_record.height,
+                "video_codec": media_record.video_codec,
+                "audio_codec": media_record.audio_codec,
+                "framerate": media_record.framerate,
+                "video_bitrate": media_record.video_bitrate,
+                "audio_bitrate": media_record.audio_bitrate
+            })
+        
+        # Add URLs
+        metadata["urls"] = {
+            "download": f"/api/media/{media_record.id}/download",
+            "thumbnail": f"/api/media/{media_record.id}/thumbnail"
+        }
+        
+        # Add streaming URL for videos
+        if media_record.media_type == 'video':
+            metadata["urls"]["stream"] = f"/api/media/{media_record.id}/stream"
+        
+        logger.info(f"Retrieved media metadata: media_id={media_id}, user_id={current_user.user_id if current_user else None}")
+        return metadata
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Media metadata retrieval error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve media metadata")
+
+
+# Legacy photo upload endpoint (kept for backward compatibility)
 @app.post("/api/photos/upload")
 async def upload_photo(
     file: UploadFile = File(...),
@@ -1953,7 +2634,14 @@ async def upload_photo(
     
     # Verify user has permission to upload photos
     if not current_user.has_permission("photos", "create"):
-        raise HTTPException(status_code=403, detail="No permission to upload photos")
+        detail = "No permission to upload photos. "
+        if not current_user.roles:
+            detail += "User has no roles assigned - this indicates a system configuration issue. Contact administrator."
+        elif not current_user.permissions:
+            detail += "User roles have no permissions - this indicates a system configuration issue. Contact administrator."
+        else:
+            detail += f"Available permissions: {', '.join(current_user.permissions)}"
+        raise HTTPException(status_code=403, detail=detail)
     
     # File validation
     if not file.content_type or not file.content_type.startswith("image/"):

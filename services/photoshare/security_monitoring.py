@@ -137,8 +137,7 @@ class SecurityMonitor:
         # Background monitoring thread
         self.monitoring_active = True
         self.alert_queue = queue.Queue()
-        self.monitoring_thread = threading.Thread(target=self._monitoring_worker, daemon=True)
-        self.monitoring_thread.start()
+        self.monitoring_thread = None
         
         # Auto-correlation patterns
         self.correlation_rules = [
@@ -148,7 +147,36 @@ class SecurityMonitor:
             self._detect_anomalous_behavior
         ]
         
+        # Initialize monitoring thread in a delayed, safe manner
+        self._thread_start_attempted = False
+        self._thread_initialized = False
+        
+        # Disable automatic thread startup to avoid threading errors
+        # Thread will be started on first security event if needed
+        logger.debug("Security monitoring initialized without background thread (will start on demand)")
+        
         logger.info("Security monitoring system initialized")
+    
+    def _start_monitoring_thread(self):
+        """Start the background monitoring thread safely."""
+        if self._thread_initialized:
+            return  # Already started
+            
+        try:
+            # Ensure the monitoring worker method is available and callable
+            if not hasattr(self, '_monitoring_worker') or not callable(getattr(self, '_monitoring_worker', None)):
+                logger.warning("Monitoring worker method not available or not callable")
+                return
+                
+            # Start monitoring thread directly with the method
+            self.monitoring_thread = threading.Thread(target=self._monitoring_worker, daemon=True)
+            self.monitoring_thread.start()
+            self._thread_initialized = True
+            logger.info("Security monitoring thread started successfully")
+            
+        except Exception as e:
+            logger.error(f"Failed to start security monitoring thread: {e}")
+            self.monitoring_active = False
     
     def log_incident(self, 
                     severity: AlertSeverity,
@@ -161,6 +189,14 @@ class SecurityMonitor:
                     user_agent: str = "",
                     user_id: Optional[str] = None) -> str:
         """Log a security incident."""
+        
+        # Start monitoring thread on first security event if not already started
+        if not self._thread_start_attempted:
+            self._thread_start_attempted = True
+            try:
+                self._start_monitoring_thread()
+            except Exception as e:
+                logger.debug(f"Could not start monitoring thread: {e}")
         
         incident_id = hashlib.md5(
             f"{time.time()}{source_ip}{threat_type.value}".encode()
@@ -680,7 +716,7 @@ PhotoShare Security Monitoring System
     def shutdown(self):
         """Shutdown monitoring system."""
         self.monitoring_active = False
-        if self.monitoring_thread.is_alive():
+        if self.monitoring_thread and self.monitoring_thread.is_alive():
             self.monitoring_thread.join(timeout=5)
         logger.info("Security monitoring system shutdown")
 

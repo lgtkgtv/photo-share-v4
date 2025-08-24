@@ -19,7 +19,8 @@ services:
     env_file:
       - .env.auth-service
     depends_on:
-      - auth-db
+      auth-db:
+        condition: service_healthy
     volumes:
       - ./services/auth-service:/app
     networks:
@@ -28,10 +29,10 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
   
   auth-db:
     image: postgres:15-alpine
@@ -68,11 +69,17 @@ services:
     environment:
       - ENVIRONMENT=production
       - AUTH_SERVICE_URL=http://auth-service:8000
+      - JWT_SECRET_KEY=AnotherVeryStrongJWTSecretKeyForAuthentication2024AbCdEfGhIj
+      - JWT_ALGORITHM=HS256
+      - JWT_AUDIENCE=photoshare-app
+      - JWT_ISSUER=photoshare-auth
     env_file:
       - .env.application
     depends_on:
-      - app-db
-      - auth-service
+      app-db:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
     volumes:
       - ./services/photoshare:/app
       - photo_storage:/app/storage
@@ -81,10 +88,10 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
   
   app-db:
     image: postgres:15-alpine

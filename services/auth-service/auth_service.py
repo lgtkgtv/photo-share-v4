@@ -19,6 +19,7 @@ from pydantic import BaseModel, EmailStr
 import logging
 
 from auth_database import auth_db_manager, User, Session, SSOAccount, Role, Permission, UserRole, RolePermission, EmailVerification, AuditLog
+from sqlalchemy import select
 from sso_providers import sso_manager, SSOUserProfile
 from two_factor_auth import get_twofa_manager
 from security import SecurityMiddleware, RateLimiter
@@ -320,7 +321,8 @@ class AuthenticationService:
                 
             async with auth_db_manager.session_factory() as session:
                 # Find user
-                user = await session.query(User).filter(User.email == form_data.username).first()
+                result = await session.execute(select(User).filter(User.email == form_data.username))
+                user = result.scalar_one_or_none()
                 
                 if not user or user.is_locked:
                     await self._log_failed_login(session, form_data.username, req)
@@ -486,7 +488,8 @@ class AuthenticationService:
             
             async with auth_db_manager.session_factory() as session:
                 # Find and invalidate session
-                user_session = await session.query(Session).filter(Session.jwt_token == token).first()
+                result = await session.execute(select(Session).filter(Session.jwt_token == token))
+                user_session = result.scalar_one_or_none()
                 
                 if user_session:
                     user_session.is_active = False
@@ -603,8 +606,10 @@ class AuthenticationService:
         user_role = role_result.scalar_one_or_none()
         
         if not user_role:
-            logger.warning("Default 'user' role not found - run setup_rbac.py first")
-            return
+            error_msg = "Critical Error: Default 'user' role not found. The RBAC system is not properly initialized. New users cannot be assigned permissions."
+            logger.error(error_msg)
+            logger.error("Solution: The RBAC system should auto-initialize on startup. If this error persists, manually run: python setup_rbac.py")
+            raise Exception(error_msg)
             
         # Check if user already has this role
         existing_query = select(UserRole).where(
@@ -724,16 +729,18 @@ class AuthenticationService:
     async def _find_or_create_sso_user(self, session, profile: SSOUserProfile) -> User:
         """Find existing user or create new user from SSO profile."""
         # Look for existing SSO account
-        sso_account = await session.query(SSOAccount).filter(
+        result = await session.execute(select(SSOAccount).filter(
             SSOAccount.provider == profile.provider,
             SSOAccount.external_id == profile.external_id
-        ).first()
+        ))
+        sso_account = result.scalar_one_or_none()
         
         if sso_account:
             return await session.get(User, sso_account.user_id)
             
         # Look for existing user by email
-        user = await session.query(User).filter(User.email == profile.email).first()
+        result = await session.execute(select(User).filter(User.email == profile.email))
+        user = result.scalar_one_or_none()
         
         if not user:
             # Create new user

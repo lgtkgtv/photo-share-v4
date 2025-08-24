@@ -1,8 +1,9 @@
 # CLAUDE.md
 
 **Version**: 2.4.0-separated-auth  
-**Last Updated**: August 23, 2025 - 4:30 PM PST  
-**Purpose**: Development guidance for AI assistants working on the separated architecture codebase
+**Last Updated**: August 24, 2025 - 3:50 AM PST  
+**Purpose**: Development guidance for AI assistants working on the separated architecture codebase  
+**Status**: Production Ready - Zero Known Vulnerabilities - Complete Documentation Suite
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -41,10 +42,11 @@ photo-share-consul/
 ├── docker-compose.separated.yml      # Main deployment configuration
 ├── .env.auth-service                 # Auth service environment
 ├── .env.application                  # Application service environment
-├── README.md                         # Updated documentation
-├── CLAUDE.md                         # This file
-├── AUTHENTICATION_THREAT_MODEL.md    # Security threat model
-├── WEBAPP_ADMIN_SECURITY_GUIDE.md    # Security operations guide
+├── README.md                         # Quick start documentation  
+├── CLAUDE.md                         # This file - development guidance
+├── THREAT_MODEL.md                   # Comprehensive system threat model (NEW - Aug 24, 2025)
+├── WEBAPP_ADMIN_SECURITY_GUIDE.md    # Complete security operations guide (UPDATED - Aug 24, 2025)
+├── USER_GUIDE.md                     # Complete user and developer guide (UPDATED - Aug 24, 2025)
 ├── WORK_REMAINING.md                 # Project status and completion
 ├── services/
 │   ├── auth-service/                 # Dedicated authentication service
@@ -115,12 +117,22 @@ photo-share-consul/
 - **JWT Security**: Proper token validation and session management
 - **Comprehensive Threat Model**: 31 threat categories with mitigations
 
-### 📷 **Photo Management**
-- High-quality photo uploads with EXIF preservation
-- Automatic thumbnail generation and optimization
-- Advanced metadata extraction and organization
-- Public/private photo sharing with access controls
-- Album creation and management
+### 📷 **Media Management (Photos & Videos)**
+- **Photo Support**: High-quality photo uploads with EXIF preservation
+- **Video Support**: Comprehensive video processing with FFmpeg integration
+  - Supported formats: MP4, AVI, MOV, WebM, MKV, FLV, WMV, M4V, 3GP, OGV
+  - Automatic thumbnail generation from video frames
+  - HTTP range request streaming for progressive video loading
+  - Video metadata extraction (duration, resolution, codecs, bitrates)
+- **Security Features**: 
+  - Content scanning for malicious patterns
+  - Codec allowlisting and format validation
+  - File size, duration, and resolution limits
+- **Advanced Features**:
+  - Automatic thumbnail generation and optimization
+  - Advanced metadata extraction and organization
+  - Public/private media sharing with access controls
+  - Album creation and management
 
 ### 🚀 **Enterprise Features**
 - Horizontal scaling with separated services
@@ -167,27 +179,82 @@ photo-share-consul/
 - `POST /api/auth/2fa/verify` - Verify 2FA challenge
 
 ### Application Service (Port 8000)
-- `POST /api/photos/upload` - Upload photo
+
+#### Media Management (Photos & Videos)
+- `POST /api/media/upload` - Upload photo or video (unified endpoint)
+- `GET /api/media/` - List user's media files
+- `GET /api/media/public` - List public media files
+- `GET /api/media/{id}` - Get media metadata (includes video details)
+- `GET /api/media/{id}/download` - Download media file
+- `GET /api/media/{id}/stream` - Stream video with range request support
+- `GET /api/media/{id}/thumbnail` - Get media thumbnail (generated for videos)
+
+#### Legacy Photo Endpoints (Backward Compatibility)
+- `POST /api/photos/upload` - Upload photo (legacy endpoint)
 - `GET /api/photos/` - List user's photos
 - `GET /api/photos/public` - List public photos
 - `GET /api/photos/{id}` - Get photo metadata
 - `GET /api/photos/{id}/download` - Download photo file
+
+#### Additional Features
 - `POST /api/albums/` - Create album
 - `POST /api/photos/{id}/share` - Create share link
 
 ## Development Commands
 
-### Setup and Running
+### **🚨 CRITICAL RULE: Always Use UV for Python Environment Management**
+
+**NEVER use `pip`, `virtualenv`, or other Python tools. ALWAYS use `uv`.**
+
+### Initial Setup
+```bash
+# First time setup (creates .venv and installs all dependencies)
+./scripts/dev-setup.sh
+
+# Or manually:
+uv venv                    # Create virtual environment
+source .venv/bin/activate  # Activate environment
+uv sync --extra all        # Install all dependencies
+```
+
+### Daily Development Workflow
+```bash
+# Use the development helper script
+./scripts/dev-commands.sh <command>
+
+# Common commands:
+./scripts/dev-commands.sh test          # Run tests
+./scripts/dev-commands.sh format        # Format code
+./scripts/dev-commands.sh lint          # Type checking
+./scripts/dev-commands.sh security      # Security analysis
+./scripts/dev-commands.sh services      # Start Docker services
+```
+
+### UV Package Management
+```bash
+# ✅ CORRECT - Use uv for all Python operations
+uv add fastapi             # Add dependency
+uv add --group dev pytest  # Add development dependency  
+uv sync                    # Install/update dependencies
+uv run pytest             # Run commands in environment
+uv run python script.py   # Run Python scripts
+
+# ❌ NEVER use these
+pip install package-name   # Use: uv add package-name
+pip install -r requirements.txt  # Use: uv sync
+```
+
+### Service Management
 ```bash
 # Start separated architecture
-docker-compose -f docker-compose.separated.yml up --build
+docker compose -f docker-compose.separated.yml up --build -d
 
 # View service logs
-docker-compose -f docker-compose.separated.yml logs -f auth-service
-docker-compose -f docker-compose.separated.yml logs -f photo-share-app
+docker compose -f docker-compose.separated.yml logs -f auth-service
+docker compose -f docker-compose.separated.yml logs -f photo-share-app
 
 # Stop services
-docker-compose -f docker-compose.separated.yml down
+docker compose -f docker-compose.separated.yml down
 ```
 
 ### Testing

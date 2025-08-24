@@ -765,7 +765,8 @@ class SecretRotationManager:
                               success: bool, error_message: Optional[str],
                               duration: float) -> str:
         """Record rotation event"""
-        event_id = f"evt_{hashlib.sha256(f"{secret_id}{time.time()}".encode()).hexdigest()[:16]}"
+        timestamp = str(time.time())
+        event_id = f"evt_{hashlib.sha256(f'{secret_id}{timestamp}'.encode()).hexdigest()[:16]}"
         
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("""
@@ -793,7 +794,8 @@ class SecretRotationManager:
 
     def _request_rotation_approval(self, secret_id: str, reason: str):
         """Request rotation approval"""
-        approval_id = f"appr_{hashlib.sha256(f"{secret_id}{time.time()}".encode()).hexdigest()[:16]}"
+        timestamp = str(time.time())
+        approval_id = f"appr_{hashlib.sha256(f'{secret_id}{timestamp}'.encode()).hexdigest()[:16]}"
         
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("""

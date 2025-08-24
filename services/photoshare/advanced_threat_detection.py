@@ -654,7 +654,8 @@ class AdvancedThreatDetector:
         response_actions = self._determine_response_actions(severity, threat_type)
         
         # Create event
-        event_id = f"threat_{hashlib.sha256(f"{time.time()}{event_data}".encode()).hexdigest()[:16]}"
+        timestamp = str(time.time())
+        event_id = f"threat_{hashlib.sha256(f'{timestamp}{event_data}'.encode()).hexdigest()[:16]}"
         
         threat_event = ThreatEvent(
             event_id=event_id,
@@ -813,7 +814,8 @@ class AdvancedThreatDetector:
                             severity: ThreatSeverity, confidence: float = 0.8,
                             source: str = "manual") -> str:
         """Add new threat indicator"""
-        indicator_id = f"ioc_{hashlib.sha256(f"{indicator_type}{value}".encode()).hexdigest()[:16]}"
+        combined = f"{indicator_type}{value}"
+        indicator_id = f"ioc_{hashlib.sha256(combined.encode()).hexdigest()[:16]}"
         
         indicator = ThreatIndicator(
             indicator_id=indicator_id,

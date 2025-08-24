@@ -25,7 +25,33 @@ async def lifespan(app):
     await db_manager.initialize()
     await db_manager.create_tables()
     
-    # Note: Database initialization is handled by the auth_service itself
+    # Initialize RBAC system - CRITICAL for proper permissions
+    print("🔐 Initializing RBAC system...")
+    try:
+        from setup_rbac import setup_default_permissions, setup_default_roles, assign_role_permissions, assign_default_role_to_users
+        
+        # Setup permissions
+        print("  📋 Setting up permissions...")
+        await setup_default_permissions()
+        
+        # Setup roles  
+        print("  👥 Setting up roles...")
+        await setup_default_roles()
+        
+        # Assign permissions to roles
+        print("  🔗 Assigning permissions to roles...")
+        await assign_role_permissions()
+        
+        # Assign default roles to existing users
+        print("  👤 Assigning default roles to existing users...")
+        await assign_default_role_to_users()
+        
+        print("✅ RBAC system initialized successfully")
+        
+    except Exception as e:
+        print(f"❌ RBAC initialization failed: {e}")
+        print("⚠️  Authentication service will start but user registration may fail")
+        print("   Run 'python setup_rbac.py' manually to fix this issue")
     
     # Initialize SSO providers
     sso_manager = SSOProviderManager()

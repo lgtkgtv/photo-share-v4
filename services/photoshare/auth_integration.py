@@ -17,12 +17,13 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from functools import wraps
 import time
 
-# Import enhanced JWT security
-try:
-    from jwt_security import jwt_secret_manager, validate_jwt_token, generate_secure_jwt
-    JWT_SECURITY_ENHANCED = True
-except ImportError:
-    JWT_SECURITY_ENHANCED = False
+# Import enhanced JWT security - TEMPORARILY DISABLED for separated architecture
+JWT_SECURITY_ENHANCED = False
+# try:
+#     from jwt_security import jwt_secret_manager, validate_jwt_token, generate_secure_jwt
+#     JWT_SECURITY_ENHANCED = True
+# except ImportError:
+#     JWT_SECURITY_ENHANCED = False
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +78,11 @@ class AuthServiceClient:
             return payload
             
         except jwt.InvalidTokenError as e:
-            logger.warning(f"Invalid JWT token: {e}")
+            # Only log detailed errors for non-trivial cases (avoid spam from malformed requests)
+            if "Not enough segments" not in str(e):
+                logger.warning(f"Invalid JWT token: {e}")
+            else:
+                logger.debug(f"Malformed JWT token received: {e}")
             raise HTTPException(status_code=401, detail="Invalid token")
         except Exception as e:
             logger.error(f"Token verification error: {e}")

@@ -10,7 +10,7 @@ All auth is handled by the separate authentication service.
 import os
 from datetime import datetime, timezone
 from typing import AsyncGenerator
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, ForeignKey, UniqueConstraint, Numeric
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.dialects.postgresql import JSON
@@ -37,9 +37,10 @@ APP_DATABASE_URL = get_app_database_url()
 # SQLAlchemy setup for application database
 AppBase = declarative_base()
 
+# Legacy Photo class for backward compatibility
 class Photo(AppBase):
-    """Photo metadata and content information."""
-    __tablename__ = "photos"
+    """Legacy photo metadata - use Media class for new implementations."""
+    __tablename__ = "photos"  # This will be renamed to "media" in migration
     
     id = Column(Integer, primary_key=True, index=True)
     
@@ -138,6 +139,162 @@ class Photo(AppBase):
             })
         else:
             # For public photos, still include location if the photo owner made it public
+            if self.is_public and self.location_name:
+                data["location_name"] = self.location_name
+                
+        return data
+
+class Media(AppBase):
+    """Unified media metadata for photos and videos."""
+    __tablename__ = "media"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # User reference (UUID from auth service, not foreign key)
+    user_uuid = Column(String(36), nullable=False, index=True)  # UUID from auth service
+    user_email = Column(String(255), nullable=False, index=True)  # Denormalized for queries
+    
+    # File information
+    filename = Column(String(255), nullable=False)
+    original_filename = Column(String(255), nullable=False)
+    content_type = Column(String(100), nullable=False)
+    file_size = Column(Integer, nullable=False)
+    storage_path = Column(String(500), nullable=False)
+    
+    # Media type and processing
+    media_type = Column(String(10), nullable=False, default='photo', index=True)  # 'photo', 'video'
+    processing_status = Column(String(20), default='completed', index=True)  # pending, processing, completed, failed
+    
+    # Media metadata
+    title = Column(String(255), nullable=True)
+    description = Column(Text, nullable=True)
+    
+    # Common properties (both photos and videos)
+    width = Column(Integer, nullable=True)
+    height = Column(Integer, nullable=True)
+    orientation = Column(String(20), nullable=True)  # landscape, portrait, square
+    
+    # Video-specific properties
+    duration = Column(Integer, nullable=True)  # Video duration in seconds
+    video_codec = Column(String(20), nullable=True)  # H.264, H.265, VP9, AV1
+    audio_codec = Column(String(20), nullable=True)  # AAC, MP3, Opus
+    resolution = Column(String(20), nullable=True)  # 1080p, 720p, 4K
+    framerate = Column(Numeric(5,2), nullable=True)  # 30.0, 60.0 fps
+    bitrate = Column(Integer, nullable=True)  # Video bitrate in kbps
+    thumbnail_path = Column(String(500), nullable=True)  # Video thumbnail storage
+    transcoded_variants = Column(JSON, nullable=True)  # Different quality variants
+    
+    # EXIF/metadata (for photos primarily)
+    exif_data = Column(JSON, nullable=True)
+    
+    # GPS coordinates (optional)
+    latitude = Column(String(50), nullable=True)
+    longitude = Column(String(50), nullable=True)
+    location_name = Column(String(255), nullable=True)
+    
+    # Media classification
+    is_public = Column(Boolean, default=False, index=True)
+    is_featured = Column(Boolean, default=False, index=True)
+    is_archived = Column(Boolean, default=False, index=True)
+    
+    # Content moderation
+    is_approved = Column(Boolean, default=True, index=True)
+    moderation_status = Column(String(20), default="approved", index=True)  # pending, approved, rejected
+    moderation_notes = Column(Text, nullable=True)
+    
+    # Analytics
+    view_count = Column(Integer, default=0)
+    download_count = Column(Integer, default=0)
+    like_count = Column(Integer, default=0)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    taken_at = Column(DateTime(timezone=True), nullable=True)  # When photo/video was actually taken
+    
+    @property
+    def is_video(self) -> bool:
+        """Check if this media item is a video."""
+        return self.media_type == 'video'
+    
+    @property
+    def is_photo(self) -> bool:
+        """Check if this media item is a photo."""
+        return self.media_type == 'photo'
+    
+    @property
+    def is_processing(self) -> bool:
+        """Check if media is still being processed."""
+        return self.processing_status in ['pending', 'processing']
+    
+    def to_dict(self, include_sensitive_data=False):
+        """
+        Convert media to dictionary.
+        
+        Args:
+            include_sensitive_data: If True, includes storage_path and EXIF data
+        """
+        data = {
+            "id": self.id,
+            "user_uuid": self.user_uuid,
+            "user_email": self.user_email,
+            "filename": self.filename,
+            "original_filename": self.original_filename,
+            "content_type": self.content_type,
+            "file_size": self.file_size,
+            "media_type": self.media_type,
+            "processing_status": self.processing_status,
+            "title": self.title,
+            "description": self.description,
+            "width": self.width,
+            "height": self.height,
+            "orientation": self.orientation,
+            "is_public": self.is_public,
+            "is_featured": self.is_featured,
+            "is_archived": self.is_archived,
+            "is_approved": self.is_approved,
+            "moderation_status": self.moderation_status,
+            "view_count": self.view_count,
+            "download_count": self.download_count,
+            "like_count": self.like_count,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "taken_at": self.taken_at.isoformat() if self.taken_at else None,
+        }
+        
+        # Add video-specific fields for videos
+        if self.is_video:
+            data.update({
+                "duration": self.duration,
+                "video_codec": self.video_codec,
+                "audio_codec": self.audio_codec,
+                "resolution": self.resolution,
+                "framerate": float(self.framerate) if self.framerate else None,
+                "bitrate": self.bitrate,
+                "transcoded_variants": self.transcoded_variants,
+                # API endpoints for videos
+                "stream_url": f"/api/media/{self.id}/stream",
+                "thumbnail_url": f"/api/media/{self.id}/thumbnail" if self.thumbnail_path else None,
+            })
+        
+        # API endpoints for secure access
+        data.update({
+            "download_url": f"/api/media/{self.id}/download",
+            "metadata_url": f"/api/media/{self.id}"
+        })
+        
+        # Only include sensitive data if explicitly requested (for admin/internal use)
+        if include_sensitive_data:
+            data.update({
+                "storage_path": self.storage_path,
+                "thumbnail_path": self.thumbnail_path,
+                "exif_data": self.exif_data,
+                "latitude": self.latitude,
+                "longitude": self.longitude,
+                "location_name": self.location_name
+            })
+        else:
+            # For public media, still include location if the owner made it public
             if self.is_public and self.location_name:
                 data["location_name"] = self.location_name
                 

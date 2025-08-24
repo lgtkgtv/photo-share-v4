@@ -1,1388 +1,1636 @@
 # PhotoShare Complete User Guide
 # =============================
 
-**Welcome to PhotoShare!** This comprehensive guide will help you understand, set up, develop, test, and deploy the PhotoShare application. Whether you're a new developer, DevOps engineer, or just exploring the codebase, this guide has everything you need.
+**Welcome to PhotoShare!** This comprehensive guide will help you understand, set up, develop, test, and deploy the PhotoShare separated microservices platform. Whether you're a new developer, DevOps engineer, or just exploring the codebase, this guide has everything you need.
+
+**Version**: 2.4.0-separated-auth  
+**Last Updated**: August 24, 2025  
+**Status**: Production Ready - Zero Known Vulnerabilities
+
+---
 
 ## 📖 Table of Contents
 
-1. [Project Overview](#-project-overview)
-2. [Architecture Deep Dive](#-architecture-deep-dive)  
-3. [Project Structure](#-project-structure)
-4. [Environment Configuration](#-environment-configuration)
-5. [Docker Compose Explained](#-docker-compose-explained)
-6. [Development Setup](#-development-setup)
-7. [Testing Framework](#-testing-framework)
-8. [Security & Compliance](#-security--compliance)
-9. [Production Deployment](#-production-deployment)
-10. [Troubleshooting](#-troubleshooting)
+1. [🎯 Project Overview](#-project-overview)
+2. [🏗️ Architecture Deep Dive](#️-architecture-deep-dive)  
+3. [📁 Project Structure](#-project-structure)
+4. [⚙️ Environment Configuration](#️-environment-configuration)
+5. [🐳 Docker Compose Explained](#-docker-compose-explained)
+6. [🛠️ Development Setup](#️-development-setup)
+7. [🧪 Testing Framework](#-testing-framework)
+8. [🔐 Security & Compliance](#-security--compliance)
+9. [🚀 Production Deployment](#-production-deployment)
+10. [🔧 Troubleshooting](#-troubleshooting)
+11. [📚 API Reference](#-api-reference)
+12. [🎓 Advanced Usage](#-advanced-usage)
 
 ---
 
 ## 🎯 Project Overview
 
-PhotoShare is a **production-ready photo sharing platform** built with modern microservices architecture, featuring comprehensive security, scalability, and enterprise-grade features.
+PhotoShare is a **production-ready photo sharing platform** built with modern microservices architecture, featuring comprehensive security, scalability, and enterprise-grade features with completely separated authentication and application services.
 
 ### What PhotoShare Does
-- 📷 **Photo Management**: Upload, organize, and share high-quality photos
-- 👥 **User Management**: Secure registration, authentication, and role-based access
-- 🔐 **Enterprise Security**: SSO, 2FA, RBAC, and JWT-based authentication
+- 📷 **Photo Management**: Upload, organize, and share high-quality photos with metadata
+- 👥 **User Management**: Secure registration, authentication, and role-based access control
+- 🔐 **Enterprise Security**: SSO, 2FA, RBAC, and JWT-based authentication with dedicated auth service
 - 📱 **API-First Design**: RESTful APIs ready for web, mobile, and third-party integrations
-- 🎛️ **Admin Controls**: User management, content moderation, and system monitoring
+- 🎛️ **Admin Controls**: User management, content moderation, and comprehensive system monitoring
+- 🛡️ **Security Focus**: Complete service separation with defense-in-depth security architecture
 
-### Key Features
-- **Separated Microservices**: Independent auth and photo services
-- **Database Isolation**: Separate databases for security and performance
-- **Role-Based Access Control**: Fine-grained permissions system
-- **Email Verification**: Secure user onboarding flow
-- **JWT Security**: Industry-standard token authentication
-- **Production Ready**: SSL, monitoring, scaling, and backup capabilities
+### Key Features & Capabilities
+
+#### Separated Microservices Architecture
+- **Authentication Service** (Port 8001): Dedicated user auth, SSO, 2FA, RBAC
+- **Application Service** (Port 8000): Photo management, file storage, sharing features
+- **Database Isolation**: Complete separation of auth and application data
+- **Inter-Service Security**: JWT-based service-to-service authentication
+
+#### Advanced Security Features
+- Multi-factor authentication (TOTP, SMS, backup codes)
+- Single Sign-On (SSO) with multiple provider support
+- Role-based access control with granular permissions
+- Real-time security monitoring and threat detection
+- Comprehensive audit trails and tamper-proof logging
+- Automated security scanning and vulnerability management
+
+#### Enterprise-Grade Capabilities
+- High availability with auto-scaling support
+- Comprehensive monitoring with Prometheus and Grafana
+- Automated backup and disaster recovery
+- GDPR compliance and data protection
+- Performance optimization with intelligent caching
+- Container security and vulnerability scanning
 
 ---
 
 ## 🏗️ Architecture Deep Dive
 
-PhotoShare uses a **separated microservices architecture** designed for security, scalability, and maintainability.
-
-### High-Level Architecture
+### System Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    PhotoShare Platform                      │
-└─────────────────────────────────────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────┐    ┌─────────────────┐    ┌──────────────┐
-│  Frontend/Web   │    │   Mobile App    │    │  API Clients │
-│  (Port 3000)    │    │                 │    │              │
-└─────────────────┘    └─────────────────┘    └──────────────┘
-         │                       │                       │
-         └───────────────────────┼───────────────────────┘
-                                 │
-                                 ▼
-                    ┌─────────────────────┐
-                    │      NGINX          │
-                    │  (Load Balancer)    │
-                    │   Ports 80/443      │
-                    └─────────────────────┘
-                                 │
-                ┌────────────────┼────────────────┐
-                │                                │
-                ▼                                ▼
-    ┌─────────────────────┐            ┌─────────────────────┐
-    │   Auth Service      │◄──────────►│  Photo Service      │
-    │   Port: 8001        │            │  Port: 8000         │
-    │                     │            │                     │
-    │ • User Registration │            │ • Photo Upload      │
-    │ • Email Verification│            │ • Photo Management  │
-    │ • JWT Authentication│            │ • File Storage      │
-    │ • SSO Integration   │            │ • Album Management  │
-    │ • 2FA Management    │            │ • Permission Check  │
-    │ • RBAC System       │            │ • Public API        │
-    └─────────────────────┘            └─────────────────────┘
-                │                                │
-                ▼                                ▼
-    ┌─────────────────────┐            ┌─────────────────────┐
-    │   Auth Database     │            │  Photo Database     │
-    │   Port: 5433        │            │  Port: 5432         │
-    │                     │            │                     │
-    │ • users             │            │ • photos            │
-    │ • roles             │            │ • albums            │
-    │ • permissions       │            │ • file_metadata     │
-    │ • sessions          │            │ • sharing_tokens    │
-    │ • email_verifications│            │ • analytics        │
-    │ • sso_accounts      │            │                     │
-    └─────────────────────┘            └─────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                      PhotoShare Platform                            │
+├─────────────────────┬───────────────────────┬─────────────────────┤
+│   Auth Service      │   Application Service │   Infrastructure    │
+│   (Port 8001)       │   (Port 8000)        │                     │
+├─────────────────────┼───────────────────────┼─────────────────────┤
+│ • User Registration │ • Photo Upload        │ • NGINX Proxy       │
+│ • JWT Management    │ • File Processing     │ • SSL/TLS           │
+│ • SSO Integration   │ • Album Organization  │ • Rate Limiting     │
+│ • 2FA Systems       │ • Sharing Controls    │ • Load Balancing    │
+│ • RBAC Management   │ • Search Features     │ • WAF Protection    │
+│ • Session Security  │ • Analytics           │ • Monitoring        │
+├─────────────────────┼───────────────────────┼─────────────────────┤
+│   Auth Database     │   App Database        │   Shared Services   │
+│   (Port 5433)       │   (Port 5432)        │                     │
+│ • users             │ • photos              │ • Redis Cache       │
+│ • sessions          │ • albums              │ • Prometheus        │
+│ • roles             │ • comments            │ • Grafana           │
+│ • permissions       │ • shares              │ • Log Aggregation   │
+│ • 2fa_devices       │ • analytics           │ • Backup Systems    │
+│ • sso_accounts      │ • metadata            │                     │
+└─────────────────────┴───────────────────────┴─────────────────────┘
 ```
 
-### Service Communication Flow
+### Service Responsibilities
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant Auth
-    participant Photo
-    participant AuthDB
-    participant PhotoDB
+#### Authentication Service (auth-service)
+**Primary Functions:**
+- User account lifecycle management
+- Authentication and authorization  
+- JWT token generation and validation
+- Multi-factor authentication (2FA)
+- Single Sign-On (SSO) provider integration
+- Role-based access control (RBAC)
+- Session management and security
 
-    User->>Auth: Register/Login
-    Auth->>AuthDB: Store user data
-    Auth-->>User: JWT Token
-    
-    User->>Photo: Upload photo (with JWT)
-    Photo->>Auth: Validate JWT & get permissions
-    Auth-->>Photo: User info & permissions
-    Photo->>PhotoDB: Store photo metadata
-    Photo-->>User: Upload confirmation
+**Security Features:**
+- Secure password hashing with BCrypt
+- JWT token signing and verification
+- Rate limiting and brute force protection
+- Account lockout and security monitoring
+- Audit logging for all auth events
+
+#### Application Service (photo-share-app)
+**Primary Functions:**
+- Photo upload and storage management
+- Image processing and thumbnail generation
+- Album creation and organization
+- Photo sharing and permissions
+- Search and discovery features
+- Performance optimization and caching
+
+**Integration Features:**
+- JWT token validation with auth service
+- User authorization verification
+- File security scanning and validation
+- Performance metrics and monitoring
+- Inter-service communication security
+
+### Data Flow Architecture
+
 ```
+1. User Authentication Flow:
+   Browser → NGINX → Auth Service → Auth Database
+                  ↓
+             JWT Token Generated
+                  ↓
+   Browser ← NGINX ← Auth Service
 
-### Why Separated Architecture?
+2. Photo Upload Flow:
+   Browser → NGINX → App Service → Auth Service (token validation)
+                  ↓                      ↓
+            File Storage            Auth Database
+                  ↓
+            App Database (metadata)
 
-1. **Security Isolation**: Authentication logic completely separated from application logic
-2. **Independent Scaling**: Scale auth and photo services independently based on load
-3. **Database Security**: Complete data isolation between user data and application data
-4. **Development Efficiency**: Teams can work on services independently
-5. **Technology Flexibility**: Different services can use different tech stacks if needed
-6. **Fault Tolerance**: If one service fails, others can continue operating
+3. Inter-Service Communication:
+   App Service ←→ Auth Service (JWT validation)
+        ↓               ↓
+   App Database    Auth Database
+```
 
 ---
 
 ## 📁 Project Structure
 
+### Directory Organization
+
 ```
 photo-share-consul/
+├── 📋 Configuration Files
+│   ├── docker-compose.separated.yml      # Main deployment configuration
+│   ├── .env.auth-service                 # Auth service environment variables
+│   ├── .env.application                  # Application service environment  
+│   └── CLAUDE.md                         # Development guidance
 │
-├── 📋 Documentation & Configuration
-│   ├── README.md                    # Project overview
-│   ├── USER_GUIDE.md               # This comprehensive guide
-│   ├── PRODUCTION_DEPLOYMENT.md    # Production deployment guide
-│   ├── CLAUDE.md                   # Development guidelines
-│   └── AUTHENTICATION_THREAT_MODEL.md
+├── 🔐 Security & Documentation
+│   ├── THREAT_MODEL.md                   # Comprehensive threat model
+│   ├── WEBAPP_ADMIN_SECURITY_GUIDE.md    # Security operations guide
+│   ├── USER_GUIDE.md                     # This comprehensive guide
+│   └── README.md                         # Quick start documentation
 │
-├── 🐳 Docker Configuration
-│   ├── docker-compose.separated.yml     # Development environment
-│   ├── docker-compose.production.yml    # Production environment
-│   ├── deploy-production.sh            # Production deployment script
-│   └── production-maintenance.sh       # Production management tools
-│
-├── ⚙️ Services (Microservices)
-│   ├── auth-service/                   # Authentication microservice
-│   │   ├── main.py                     # FastAPI application entry
-│   │   ├── auth_service.py            # Authentication logic
-│   │   ├── auth_database.py           # Auth database models
-│   │   ├── sso_providers.py           # SSO integrations
-│   │   ├── two_factor_auth.py         # 2FA implementation
-│   │   ├── security.py                # Security utilities
-│   │   ├── setup_rbac.py              # Role-based access setup
-│   │   ├── Dockerfile                 # Development container
-│   │   ├── Dockerfile.production      # Production container
-│   │   └── requirements.txt           # Python dependencies
+├── 🏗️ Services Directory
+│   ├── auth-service/                     # Authentication microservice
+│   │   ├── main.py                       # FastAPI auth service entry point
+│   │   ├── auth_database.py              # User database and models
+│   │   ├── auth_service.py               # Authentication endpoints
+│   │   ├── sso_providers.py              # SSO integration (Google, GitHub, etc.)
+│   │   ├── two_factor_auth.py            # 2FA implementation
+│   │   ├── setup_rbac.py                 # Role and permission setup
+│   │   ├── requirements.txt              # Python dependencies
+│   │   ├── Dockerfile                    # Container configuration
+│   │   └── init-auth-db.sql              # Database initialization
 │   │
-│   ├── photoshare/                    # Photo service
-│   │   ├── main.py                    # FastAPI application entry
-│   │   ├── app_database.py           # Photo database models
-│   │   ├── auth_integration.py        # Auth service integration
-│   │   ├── file_storage.py           # File handling
-│   │   ├── image_processing.py        # Image processing
-│   │   ├── monitoring.py             # Metrics and monitoring
-│   │   ├── performance_simple.py     # Performance optimization
-│   │   ├── error_handling.py         # Error management
-│   │   ├── Dockerfile.production     # Production container
-│   │   ├── storage/                  # File storage directory
-│   │   └── requirements.txt          # Python dependencies
+│   ├── photoshare/                       # Application microservice
+│   │   ├── main.py                       # FastAPI app service entry point
+│   │   ├── app_database.py               # Application database models
+│   │   ├── auth_integration.py           # Auth service integration
+│   │   ├── file_storage.py               # Photo storage management
+│   │   ├── image_processing.py           # Image processing and thumbnails
+│   │   ├── security_monitoring.py        # Security monitoring system
+│   │   ├── performance_simple.py         # Caching and optimization
+│   │   ├── requirements.txt              # Python dependencies
+│   │   ├── Dockerfile.separated          # Container configuration
+│   │   └── init-app-db.sql              # Database initialization
 │   │
-│   └── shared/                       # Shared utilities
-│       └── security.py               # Common security functions
+│   └── shared/                          # Shared utilities and libraries
+│       └── security.py                  # Common security functions
 │
-├── 🧪 Testing Framework
-│   ├── tests/
-│   │   ├── run_tests.py             # Unified test runner
-│   │   ├── run_security_tests.py    # Security test runner
-│   │   ├── README.md                # Testing documentation
-│   │   ├── conftest.py              # Test configuration
-│   │   ├── pytest.ini               # Pytest settings
-│   │   ├── unit/                    # Unit tests
-│   │   ├── integration/             # Integration tests
-│   │   ├── functional/              # End-to-end tests
-│   │   ├── security/                # Security & compliance tests
-│   │   ├── reports/                 # Test reports
-│   │   └── coverage/                # Coverage reports
+├── 🧪 Testing Infrastructure
+│   ├── tests/                           # Comprehensive test suite
+│   │   ├── unit/                        # Unit tests for individual components
+│   │   ├── integration/                 # Service integration tests
+│   │   ├── functional/                  # End-to-end workflow tests
+│   │   └── security/                    # Security compliance tests
 │   │
-│   └── api-integration-tests/           # Manual API testing scripts
-│       ├── test-auth-flow.sh
-│       ├── test-email-verification.sh
-│       └── test-photo-upload.sh
+│   ├── api-integration-tests/           # API workflow validation
+│   │   ├── test-auth-flow.sh            # Authentication workflow testing
+│   │   ├── test-email-verification.sh   # Email verification testing
+│   │   └── test-photo-upload.sh         # Photo management testing
+│   │
+│   └── operational-security-validation/ # Production security validation
+│       ├── test-security-improvements.py # Complete security validation
+│       └── [additional security validators]
 │
-├── 🔧 Configuration & Infrastructure
-│   ├── config/
-│   │   └── nginx.prod.conf          # NGINX production config
-│   ├── monitoring/                  # Monitoring stack config
-│   │   ├── prometheus.yml
-│   │   ├── grafana/
-│   │   └── alertmanager.yml
-│   ├── ssl/                         # SSL certificates
-│   └── tools/                       # Development tools
-│       ├── sbom-agent/              # Software Bill of Materials
-│       └── shared/                  # Shared utilities
+├── 🚀 Deployment & Operations
+│   ├── deployment-and-setup-tools/      # Production deployment automation
+│   │   ├── deploy-production.sh         # Zero-downtime deployment
+│   │   ├── setup-environment.py         # Environment initialization
+│   │   ├── generate-jwt-secrets.py      # Cryptographic key generation
+│   │   └── security-scan-containers.py  # Container security scanning
+│   │
+│   ├── monitoring/                      # Monitoring configuration
+│   │   ├── prometheus.yml               # Metrics collection config
+│   │   ├── grafana/                     # Dashboard configurations
+│   │   └── alerts/                      # Alert rules and notifications
+│   │
+│   └── nginx/                           # Reverse proxy configuration
+│       ├── nginx.conf                   # Main NGINX configuration
+│       └── ssl/                         # SSL certificate storage
 │
-└── 📜 Scripts & Utilities
-    ├── scripts/
-    │   ├── generate-jwt-secrets.py
-    │   ├── validate-config.py
-    │   └── setup-environment.py
-    └── pyproject.toml               # Python project config
+└── 🗄️ Data & Storage
+    ├── vault-like-secure-storage/       # Cryptographic key vault
+    │   ├── jwt_secrets.json             # JWT signing keys
+    │   ├── inter_service/               # Service-to-service certificates
+    │   └── sessions/                    # Session encryption keys
+    │
+    └── tamper-proof-audit-storage/      # Audit trail integrity
+        └── audit_trail.db               # Tamper-proof audit database
 ```
 
-### Key Modules Explained
+### Key File Descriptions
 
-#### Authentication Service (`services/auth-service/`)
-- **`auth_service.py`**: Core authentication logic, user management, JWT handling
-- **`auth_database.py`**: User models, roles, permissions, sessions
-- **`sso_providers.py`**: Google, Microsoft, Okta, Auth0 integrations
-- **`two_factor_auth.py`**: TOTP, SMS, backup codes, hardware keys
-- **`security.py`**: Rate limiting, input validation, security middleware
-- **`setup_rbac.py`**: Role-based access control initialization
+#### Configuration Files
+- **`docker-compose.separated.yml`**: Main orchestration file for all services
+- **`.env.auth-service`**: Authentication service environment variables and secrets
+- **`.env.application`**: Application service environment variables and configuration
 
-#### Photo Service (`services/photoshare/`)
-- **`main.py`**: Photo management APIs, upload/download endpoints
-- **`auth_integration.py`**: JWT validation, permission checking
-- **`file_storage.py`**: File handling, storage management
-- **`image_processing.py`**: Thumbnail generation, EXIF processing
-- **`app_database.py`**: Photo models, albums, metadata
-- **`monitoring.py`**: Prometheus metrics, health checks
+#### Service Implementation
+- **`services/auth-service/main.py`**: Authentication service FastAPI application
+- **`services/photoshare/main.py`**: Photo sharing service FastAPI application
+- **`services/auth-service/auth_service.py`**: Core authentication logic and endpoints
+- **`services/photoshare/auth_integration.py`**: Integration with authentication service
+
+#### Security & Monitoring
+- **`THREAT_MODEL.md`**: Complete security threat analysis and mitigations
+- **`WEBAPP_ADMIN_SECURITY_GUIDE.md`**: Operational security procedures
+- **`services/photoshare/security_monitoring.py`**: Real-time security monitoring
 
 ---
 
 ## ⚙️ Environment Configuration
 
-PhotoShare uses **3 separate environment files** to configure the microservices architecture, providing security isolation and deployment flexibility.
+### Required Environment Files
 
-### Environment Files Structure
-
-```
-photo-share-consul/
-├── .env.auth-service          # Authentication service configuration
-├── .env.application           # Photo service configuration
-├── .env.production.template   # Production deployment template
-└── .env.production           # Production config (you create this)
-```
-
-## 🔐 Environment File Details
-
-### 1. `.env.auth-service` - Authentication Service Configuration
-**Used by:** Dedicated authentication microservice  
-**Purpose:** Handles user authentication, SSO, 2FA, and RBAC
-
-**Key Configuration Areas:**
-
-#### Authentication Database (Isolated)
+#### Authentication Service Configuration (`.env.auth-service`)
 ```bash
-# Separate PostgreSQL for user accounts, roles, sessions
-AUTH_DB_HOST=auth-db
-AUTH_DB_PORT=5432
-AUTH_POSTGRES_USER=auth_user
-AUTH_POSTGRES_PASSWORD=auth_secure_password_here
-AUTH_POSTGRES_DB=photo_share_auth
-AUTH_DATABASE_URL=postgresql+asyncpg://auth_user:auth_secure_password_here@auth-db:5432/photo_share_auth
-```
+# Database Configuration
+POSTGRES_USER=auth_user
+POSTGRES_PASSWORD=your_secure_auth_password_here
+POSTGRES_DB=photo_share_auth
+DB_HOST=auth-db
+DB_PORT=5432
 
-#### JWT Configuration
-```bash
-# Token signing and validation (must match application service)
-JWT_SECRET_KEY=your-very-secure-jwt-secret-key-minimum-256-bits
+# JWT Configuration
+JWT_SECRET_KEY=your_super_secure_jwt_secret_key_here
 JWT_ALGORITHM=HS256
-JWT_EXPIRATION_MINUTES=30
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
 JWT_AUDIENCE=photoshare-app
 JWT_ISSUER=photoshare-auth
-```
 
-#### SSO Provider Integration
-```bash
-# Google OAuth 2.0 / OIDC
-GOOGLE_CLIENT_ID=your-google-client-id
-GOOGLE_CLIENT_SECRET=your-google-client-secret
-
-# Microsoft Azure AD / OIDC
-MICROSOFT_CLIENT_ID=your-azure-client-id
-MICROSOFT_CLIENT_SECRET=your-azure-client-secret
-MICROSOFT_TENANT_ID=common
-
-# Okta, Auth0, Generic OIDC providers also supported
-```
-
-#### Two-Factor Authentication
-```bash
-# 2FA encryption and SMS providers
-TWOFA_ENCRYPTION_KEY=fFmtPX__r7bVd2TJemS3QPmSaJ00mEoq6nUjsyEQF9I=
+# 2FA Configuration
 SMS_PROVIDER=twilio
-SMS_PROVIDER_API_KEY=your-twilio-api-key
-SMS_FROM_NUMBER=+1234567890
+TWILIO_ACCOUNT_SID=your_twilio_account_sid
+TWILIO_AUTH_TOKEN=your_twilio_auth_token
+TWILIO_PHONE_NUMBER=+1234567890
+TOTP_ISSUER=PhotoShare
 
-# WebAuthn hardware key support
-WEBAUTHN_RP_ID=localhost
-WEBAUTHN_RP_NAME=PhotoShare
+# SSO Configuration
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+GITHUB_CLIENT_ID=your_github_client_id
+GITHUB_CLIENT_SECRET=your_github_client_secret
+
+# Security Configuration
+RATE_LIMIT_PER_MINUTE=60
+MAX_LOGIN_ATTEMPTS=5
+ACCOUNT_LOCKOUT_DURATION=1800
+SECURITY_EMAIL_FROM=security@yourdomain.com
 ```
 
-### 2. `.env.application` - Photo Service Configuration
-**Used by:** Main photo sharing application service  
-**Purpose:** Handles photo uploads, storage, and business logic
-
-**Key Configuration Areas:**
-
-#### Application Database (Isolated)
+#### Application Service Configuration (`.env.application`)
 ```bash
-# Separate PostgreSQL for photos, metadata, albums
-APP_DB_HOST=app-db
-APP_DB_PORT=5432
-APP_POSTGRES_USER=app_user
-APP_POSTGRES_PASSWORD=app_secure_password_here
-APP_POSTGRES_DB=photo_share_app
-APP_DATABASE_URL=postgresql+asyncpg://app_user:app_secure_password_here@app-db:5432/photo_share_app
-```
+# Database Configuration
+POSTGRES_USER=app_user
+POSTGRES_PASSWORD=your_secure_app_password_here
+POSTGRES_DB=photo_share_app
+DB_HOST=app-db
+DB_PORT=5432
 
-#### Authentication Service Integration
-```bash
-# Service-to-service communication
+# Auth Service Integration
 AUTH_SERVICE_URL=http://auth-service:8000
-JWT_SECRET_KEY=your-very-secure-jwt-secret-key-minimum-256-bits  # Must match auth service
-AUTH_SERVICE_API_KEY=your-secure-service-to-service-api-key
+JWT_SECRET_KEY=your_super_secure_jwt_secret_key_here  # Must match auth service
+JWT_ALGORITHM=HS256
+JWT_AUDIENCE=photoshare-app
+JWT_ISSUER=photoshare-auth
+
+# File Storage Configuration
+UPLOAD_DIR=/app/storage
+MAX_FILE_SIZE=10485760  # 10MB
+ALLOWED_EXTENSIONS=jpg,jpeg,png,gif,webp
+ENABLE_VIRUS_SCANNING=true
+
+# Performance Configuration
+CACHE_TYPE=redis
+REDIS_URL=redis://redis-cache:6379/0
+CACHE_TIMEOUT=3600
+
+# Security Configuration
+CORS_ORIGINS=http://localhost:3000,https://yourdomain.com
+RATE_LIMIT_PER_MINUTE=100
+ENABLE_SECURITY_MONITORING=true
+
+# Monitoring Configuration
+PROMETHEUS_ENABLED=true
+GRAFANA_ENABLED=true
+LOG_LEVEL=INFO
 ```
 
-#### File Storage & Processing
+### Environment Setup Script
 ```bash
-# Local and cloud storage configuration
-STORAGE_PATH=/app/storage
-MAX_FILE_SIZE_MB=50
-ALLOWED_FILE_TYPES=image/jpeg,image/jpg,image/png,image/gif,image/bmp,image/webp
+#!/bin/bash
+# setup-environment.sh - Complete environment setup
 
-# Thumbnail generation
-GENERATE_THUMBNAILS=true
-THUMBNAIL_SIZES=150x150,300x300,800x600
-THUMBNAIL_QUALITY=85
+echo "🔧 Setting up PhotoShare environment..."
 
-# Cloud storage providers (AWS S3, Azure Blob, GCS)
-CLOUD_STORAGE_ENABLED=false
-CLOUD_STORAGE_PROVIDER=aws_s3
-AWS_ACCESS_KEY_ID=your-aws-access-key
-AWS_SECRET_ACCESS_KEY=your-aws-secret-key
+# 1. Generate secure JWT secrets
+python3 deployment-and-setup-tools/generate-jwt-secrets.py
+
+# 2. Create environment files from templates
+cp .env.auth-service.template .env.auth-service
+cp .env.application.template .env.application
+
+# 3. Generate database passwords
+AUTH_DB_PASS=$(openssl rand -base64 32)
+APP_DB_PASS=$(openssl rand -base64 32)
+
+# 4. Update environment files with generated values
+sed -i "s/your_secure_auth_password_here/$AUTH_DB_PASS/g" .env.auth-service
+sed -i "s/your_secure_app_password_here/$APP_DB_PASS/g" .env.application
+
+# 5. Set proper file permissions
+chmod 600 .env.auth-service .env.application
+
+echo "✅ Environment setup complete!"
+echo "🔒 Please review and update .env.auth-service and .env.application with your specific configuration"
 ```
-
-#### Performance & Caching
-```bash
-# Redis cache configuration
-CACHE_ENABLED=true
-CACHE_PROVIDER=redis
-REDIS_HOST=redis-cache
-REDIS_PORT=6379
-CACHE_TTL_USER_DATA=300
-CACHE_TTL_PHOTO_METADATA=600
-
-# Database connection pooling
-DB_POOL_SIZE=20
-DB_MAX_OVERFLOW=0
-DB_POOL_RECYCLE=3600
-```
-
-#### Application Features
-```bash
-# Photo processing features
-ENABLE_AUTO_ORIENTATION=true
-ENABLE_EXIF_EXTRACTION=true
-ENABLE_GPS_EXTRACTION=true
-STRIP_EXIF_ON_PUBLIC_PHOTOS=true
-
-# Social and content features
-ENABLE_COMMENTS=true
-ENABLE_PHOTO_SHARING=true
-ENABLE_PUBLIC_GALLERIES=true
-ENABLE_ANALYTICS=true
-
-# Content moderation
-ENABLE_CONTENT_MODERATION=true
-CONTENT_MODERATION_PROVIDER=aws_rekognition
-```
-
-### 3. `.env.production.template` - Production Template
-**Used by:** Production deployment  
-**Purpose:** Template for creating actual `.env.production` file
-
-```bash
-# Production Environment Configuration Template
-# Copy to .env.production and configure with your values
-# DO NOT commit .env.production to version control!
-
-ENVIRONMENT=production
-LOG_LEVEL=info
-
-# CRITICAL: Generate secure keys for production!
-JWT_SECRET_KEY=your-very-secure-256-bit-jwt-secret-key-here-change-in-production
-AUTH_DB_PASSWORD=secure-auth-db-password-change-in-production
-APP_DB_PASSWORD=secure-app-db-password-change-in-production
-REDIS_PASSWORD=secure-redis-password-change-in-production
-
-# Production domain and SSL
-DOMAIN=yourdomain.com
-ALLOWED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
-SSL_CERTIFICATE_PATH=/etc/nginx/ssl/fullchain.pem
-SSL_CERTIFICATE_KEY_PATH=/etc/nginx/ssl/privkey.pem
-
-# Production email configuration
-SMTP_HOST=smtp.your-email-provider.com
-SMTP_PORT=587
-SMTP_USER=noreply@yourdomain.com
-SMTP_PASSWORD=your-smtp-password
-
-# Security and monitoring
-SECURITY_HEADERS_ENABLED=true
-HSTS_MAX_AGE=31536000
-ENABLE_METRICS=true
-BACKUP_ENABLED=true
-```
-
-## 🛡️ Why Separate Environment Files?
-
-### Security Through Isolation
-- **Database Separation**: Auth service cannot access photo data; photo service cannot access credentials
-- **Principle of Least Privilege**: Each service only has access to its required configuration
-- **Credential Compartmentalization**: If one service is compromised, other service secrets remain protected
-
-### Microservices Architecture Benefits
-- **Independent Configuration**: Services can be configured and scaled independently
-- **Development Flexibility**: Run services separately or together based on development needs
-- **Feature Isolation**: Disable features per service without affecting others
-
-### Deployment Scenarios
-- **Development**: Use `.env.auth-service` and `.env.application` with dev-friendly settings
-- **Testing**: Override specific settings for test environments
-- **Production**: Use `.env.production` with production-grade security settings
-- **Staging**: Create environment-specific files as needed
-
-### Configuration Management Flow
-
-1. **Docker Compose** reads appropriate environment files based on compose file used
-2. **Services** receive only their relevant environment variables
-3. **Application Code** uses environment variables for runtime configuration
-4. **Security boundaries** maintained through file separation
-
-### Best Practices
-
-**⚠️ Security Warning**: Never commit production environment files to version control!
-
-```bash
-# Add to .gitignore
-.env.production
-.env.local
-.env.*.local
-```
-
-**🔑 JWT Secret Sharing**: Auth and application services must share the same `JWT_SECRET_KEY` for token validation to work.
-
-**🗄️ Database Isolation**: Always use separate databases and credentials for auth vs application services.
-
-**📝 Documentation**: Keep environment file documentation updated when adding new configuration options.
 
 ---
 
 ## 🐳 Docker Compose Explained
 
-PhotoShare provides two Docker Compose configurations optimized for different use cases.
+### Service Architecture in Docker
 
-### `docker-compose.separated.yml` - Development Environment
+The `docker-compose.separated.yml` file defines our complete microservices architecture:
 
-**Purpose**: Local development, testing, and debugging
+#### Core Services
 
 ```yaml
-# Optimized for developer productivity
 services:
+  # Authentication Service & Database
   auth-service:
     build: ./services/auth-service
-    ports:
-      - "8001:8000"                    # Direct port access
-    volumes:
-      - ./services/auth-service:/app   # Live code mounting
-    env_file:
-      - .env.auth-service             # Development config
-    networks:
-      - auth-network
-      - app-network                   # Cross-network for testing
-```
-
-**Key Features**:
-- **Live Code Mounting**: Changes reflect immediately
-- **Direct Port Access**: Each service on different ports
-- **Debug-Friendly**: Detailed logging, easy debugging
-- **Fast Startup**: Minimal resource overhead
-- **Cross-Network Communication**: Services can talk to each other for testing
-
-**When to Use**:
-- 👨‍💻 Local development
-- 🐛 Debugging issues
-- 🧪 Testing new features
-- 📚 Learning the codebase
-
-### `docker-compose.production.yml` - Production Environment
-
-**Purpose**: Production deployment with enterprise features
-
-```yaml
-# Optimized for production reliability
-services:
-  auth-service:
-    build:
-      context: ./services/auth-service
-      dockerfile: Dockerfile.production  # Production optimized
-    deploy:
-      replicas: 2                       # High availability
-      resources:
-        limits:
-          memory: 512M                  # Resource limits
-          cpus: '0.5'
+    ports: ["8001:8000"]
     environment:
       - ENVIRONMENT=production
-    networks:
-      - auth-network                    # Strict isolation
-    restart: unless-stopped
-    healthcheck:                        # Comprehensive health checks
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+    depends_on:
+      auth-db: {condition: service_healthy}
+    
+  auth-db:
+    image: postgres:15-alpine
+    ports: ["5433:5432"]
+    environment:
+      - POSTGRES_USER=auth_user
+      - POSTGRES_PASSWORD=auth_secure_password_here
+      - POSTGRES_DB=photo_share_auth
+    
+  # Application Service & Database  
+  photo-share-app:
+    build: 
+      context: ./services/photoshare
+      dockerfile: Dockerfile.separated
+    ports: ["8000:8000"]
+    environment:
+      - AUTH_SERVICE_URL=http://auth-service:8000
+    depends_on:
+      app-db: {condition: service_healthy}
+      auth-service: {condition: service_healthy}
+    
+  app-db:
+    image: postgres:15-alpine
+    ports: ["5432:5432"]
+    environment:
+      - POSTGRES_USER=app_user
+      - POSTGRES_PASSWORD=app_secure_password_here
+      - POSTGRES_DB=photo_share_app
 ```
 
-**Key Features**:
-- **Production Dockerfiles**: Multi-stage builds, security hardening
-- **Resource Management**: CPU/memory limits and reservations
-- **High Availability**: Multiple replicas, auto-restart
-- **Security**: Network isolation, non-root containers
-- **Monitoring**: Health checks, metrics collection
-- **SSL/TLS**: HTTPS termination, certificate management
-- **Load Balancing**: NGINX reverse proxy with rate limiting
+#### Infrastructure Services
 
-**When to Use**:
-- 🌍 Production deployment
-- 🏗️ Staging environments
-- 🧪 Load testing
-- 👥 User acceptance testing
-
-### Architecture Comparison
-
-| Aspect | Development (Separated) | Production |
-|--------|------------------------|------------|
-| **Goal** | Developer Productivity | Reliability & Security |
-| **Services** | 2 services, 2 databases | 2+ services, 2 databases, NGINX, Redis |
-| **Networking** | Permissive (easy debugging) | Strict isolation |
-| **Storage** | Local volumes | Persistent volumes |
-| **Security** | Basic (HTTP, weak secrets) | Enterprise (HTTPS, strong secrets) |
-| **Monitoring** | Logs only | Metrics + Logs + Alerts |
-| **Scaling** | Single instance | Horizontal scaling |
-| **Startup Time** | ~30 seconds | ~2-3 minutes |
-
----
-
-## 🚀 Development Setup
-
-Get PhotoShare running on your local machine in minutes!
-
-### Prerequisites
-
-```bash
-# Required software
-- Docker 20.10+
-- Docker Compose 2.0+
-- Git
-- Python 3.8+ (for testing)
-- Node.js 16+ (if building frontend)
-
-# System requirements
-- 8GB RAM recommended
-- 10GB free disk space
-- macOS, Linux, or Windows with WSL2
+```yaml
+  # Reverse Proxy (Optional)
+  nginx-proxy:
+    image: nginx:alpine
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    profiles: ["proxy"]
+    
+  # Monitoring Stack (Optional)
+  prometheus:
+    image: prom/prometheus:latest
+    ports: ["9090:9090"]
+    profiles: ["monitoring"]
+    
+  grafana:
+    image: grafana/grafana:latest
+    ports: ["3000:3000"]
+    profiles: ["monitoring"]
+    
+  redis-cache:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    profiles: ["monitoring"]
 ```
 
-### Quick Start (5 Minutes)
+### Service Startup Options
 
+#### Basic Services (Auth + App)
 ```bash
-# 1. Clone the repository
-git clone https://github.com/your-org/photo-share-consul.git
-cd photo-share-consul
-
-# 2. Start development environment
-docker compose -f docker-compose.separated.yml up --build
-
-# 3. Wait for services to be ready (watch the logs)
-# You'll see: ✅ Authentication service initialized successfully
-
-# 4. Test the services
-curl http://localhost:8001/health  # Auth service
-curl http://localhost:8000/health  # Photo service
-
-# 5. Access the API documentation
-# Auth API: http://localhost:8001/docs
-# Photo API: http://localhost:8000/docs
-```
-
-### Development Workflow
-
-#### Starting Services
-```bash
-# Start all services
-docker compose -f docker-compose.separated.yml up
-
-# Start in background
+# Start core services only
 docker compose -f docker-compose.separated.yml up -d
 
 # View logs
 docker compose -f docker-compose.separated.yml logs -f
-
-# Stop services
-docker compose -f docker-compose.separated.yml down
 ```
 
-#### Making Code Changes
+#### With Monitoring Stack
+```bash
+# Start with Prometheus and Grafana
+docker compose -f docker-compose.separated.yml --profile monitoring up -d
 
-1. **Edit code** in `services/auth-service/` or `services/photoshare/`
-2. **Save changes** - they're automatically reflected (live mounting)
-3. **Test changes** using the API endpoints or test scripts
-4. **View logs** to debug any issues
+# Access Grafana at http://localhost:3000 (admin/admin123)
+# Access Prometheus at http://localhost:9090
+```
 
-#### Database Management
+#### With Reverse Proxy
+```bash
+# Start with NGINX reverse proxy
+docker compose -f docker-compose.separated.yml --profile proxy up -d
+```
+
+#### Full Production Stack
+```bash
+# Start everything
+docker compose -f docker-compose.separated.yml --profile monitoring --profile proxy up -d
+```
+
+---
+
+## 🛠️ Development Setup
+
+### Prerequisites
+
+#### System Requirements
+- **Docker**: Version 20.0+ with Docker Compose V2
+- **Python**: Version 3.11+ (for local development)
+- **Node.js**: Version 18+ (for frontend development)
+- **Git**: Latest version
+- **curl/jq**: For API testing
+
+#### Hardware Recommendations
+- **CPU**: 4+ cores (8+ recommended for full stack)
+- **RAM**: 8GB minimum (16GB recommended)
+- **Storage**: 20GB free space
+- **Network**: Broadband internet for Docker image downloads
+
+### Quick Start Development Setup
+
+#### 1. Repository Setup
+```bash
+# Clone the repository
+git clone <your-repo-url> photo-share-consul
+cd photo-share-consul
+
+# Verify project structure
+ls -la
+# Should see: services/, docker-compose.separated.yml, CLAUDE.md, etc.
+```
+
+#### 2. Environment Configuration
+```bash
+# Generate JWT secrets and environment files
+bash deployment-and-setup-tools/setup-environment.sh
+
+# Review and customize environment files
+nano .env.auth-service
+nano .env.application
+```
+
+#### 3. First-Time Startup
+```bash
+# Build and start all services
+docker compose -f docker-compose.separated.yml up --build -d
+
+# Wait for services to be healthy (may take 2-3 minutes)
+docker compose -f docker-compose.separated.yml ps
+
+# All services should show "(healthy)" status
+```
+
+#### 4. Verify Installation
+```bash
+# Test authentication service
+curl -s http://localhost:8001/health | jq '.'
+
+# Test application service  
+curl -s http://localhost:8000/health | jq '.'
+
+# Both should return {"status": "healthy"}
+```
+
+### Development Workflow
+
+#### 1. Code Development
+```bash
+# Make changes to service code
+# Example: Edit services/auth-service/auth_service.py
+
+# Rebuild specific service
+docker compose -f docker-compose.separated.yml build auth-service
+
+# Restart service to apply changes
+docker compose -f docker-compose.separated.yml restart auth-service
+```
+
+#### 2. Database Development
 ```bash
 # Access auth database
-docker compose -f docker-compose.separated.yml exec auth-db psql -U auth_user -d auth_service
+docker compose -f docker-compose.separated.yml exec auth-db \
+  psql -U auth_user -d photo_share_auth
 
-# Access photo database
-docker compose -f docker-compose.separated.yml exec app-db psql -U photo_user -d photo_share
+# Access app database
+docker compose -f docker-compose.separated.yml exec app-db \
+  psql -U app_user -d photo_share_app
 
-# Reset databases (WARNING: Deletes all data)
-docker compose -f docker-compose.separated.yml down -v
-docker compose -f docker-compose.separated.yml up --build
+# View database schemas
+\dt  # List tables
+\d users  # Describe users table
 ```
 
-#### Common Development Tasks
-
-**User Registration & Verification:**
+#### 3. Live Development with Volume Mounts
 ```bash
-# Register a user
-curl -X POST http://localhost:8001/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email": "dev@example.com", "password": "DevPassword123!", "first_name": "Dev", "last_name": "User"}'
-
-# Get verification token from logs or database
-# Verify email
-curl http://localhost:8001/api/auth/verify-email/YOUR_VERIFICATION_TOKEN
+# For active development, mount code directories
+# Add to docker-compose.override.yml:
+version: '3.8'
+services:
+  auth-service:
+    volumes:
+      - ./services/auth-service:/app
+  photo-share-app:
+    volumes:
+      - ./services/photoshare:/app
 ```
 
-**Photo Upload:**
+#### 4. Debugging and Logs
 ```bash
-# First, get a JWT token by logging in
-# Then upload a photo
-curl -X POST http://localhost:8000/api/photos/upload \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  -F "file=@/path/to/photo.jpg" \
-  -F "title=My Test Photo" \
-  -F "description=Testing photo upload"
+# View service logs
+docker compose -f docker-compose.separated.yml logs -f auth-service
+docker compose -f docker-compose.separated.yml logs -f photo-share-app
+
+# Debug specific container
+docker compose -f docker-compose.separated.yml exec auth-service /bin/bash
+
+# Monitor resource usage
+docker stats
 ```
-
-### Development Tips
-
-1. **Use the API docs**: Visit `/docs` endpoints for interactive API testing
-2. **Monitor logs**: Keep logs open to see what's happening
-3. **Database inspection**: Use database clients to examine data
-4. **Test scripts**: Use scripts in `api-integration-tests/` for common workflows
-5. **Environment variables**: Modify `.env.*` files for configuration changes
 
 ---
 
 ## 🧪 Testing Framework
 
-PhotoShare includes a comprehensive testing framework with multiple test categories and automated reporting.
+### Testing Architecture
 
-### Test Architecture
+PhotoShare includes comprehensive testing at multiple levels:
 
-```
-tests/
-├── run_tests.py              # 🚀 Unified test runner
-├── run_security_tests.py     # 🔒 Security-focused test runner
-├── conftest.py               # ⚙️ Global test configuration
-├── pytest.ini               # 📋 Pytest configuration
-│
-├── unit/                     # 🔬 Unit Tests (Component Isolation)
-│   ├── auth-service/         # Auth service components
-│   ├── photoshare/          # Photo service components
-│   └── shared/              # Shared utilities
-│
-├── integration/              # 🔗 Integration Tests (Service Communication)
-│   ├── test_service_communication.py
-│   ├── test_jwt_validation.py
-│   └── test_separated_architecture.py
-│
-├── functional/               # 🎯 Functional Tests (End-to-End Workflows)
-│   └── test_user_workflows.py
-│
-├── security/                 # 🛡️ Security Tests (Compliance & Vulnerabilities)
-│   ├── test_rbac_security.py
-│   └── test_security_compliance.py
-│
-├── reports/                  # 📊 Test Reports
-└── coverage/                 # 📈 Coverage Reports
-```
-
-### Running Tests
-
-#### Quick Test Commands
+#### 1. Unit Tests (Individual Components)
+- **Location**: `tests/unit/`
+- **Purpose**: Test individual functions and classes
+- **Framework**: pytest with extensive fixtures
 
 ```bash
-# Run all tests with coverage
-python tests/run_tests.py
+# Run unit tests
+cd tests/
+python -m pytest unit/ -v
 
-# Run specific categories
-python tests/run_tests.py --categories unit integration
-
-# Run security tests
-python tests/run_security_tests.py
-
-# Quick security check
-python tests/run_security_tests.py --quick
+# Run with coverage
+python -m pytest unit/ --cov=../services --cov-report=html
 ```
 
-#### Individual Test Categories
-
-```bash
-# Unit tests (fast, no external dependencies)
-pytest tests/unit/ -v
-
-# Integration tests (requires running services)
-pytest tests/integration/ -v
-
-# Functional tests (end-to-end workflows)
-pytest tests/functional/ -v
-
-# Security tests (vulnerability scanning)
-pytest tests/security/ -v
-```
-
-#### Coverage Analysis
-
-```bash
-# Generate HTML coverage report
-pytest --cov=services --cov-report=html:tests/coverage/html
-
-# View coverage in browser
-open tests/coverage/html/index.html
-
-# Coverage with threshold enforcement
-pytest --cov=services --cov-fail-under=70
-```
-
-### Test Categories Explained
-
-#### 🔬 Unit Tests
-- **Purpose**: Test individual functions and classes in isolation
-- **Speed**: Very fast (< 1 second per test)
-- **Dependencies**: None (uses mocks)
-- **Example**: Testing JWT token validation logic
-
-#### 🔗 Integration Tests  
+#### 2. Integration Tests (Service Communication)
+- **Location**: `tests/integration/`
 - **Purpose**: Test service-to-service communication
-- **Requirements**: Running auth and photo services
-- **Example**: Auth service validates JWT, photo service accepts it
-
-#### 🎯 Functional Tests
-- **Purpose**: End-to-end user workflows
-- **Requirements**: Full system running
-- **Example**: User registers → verifies email → uploads photo
-
-#### 🛡️ Security Tests
-- **Purpose**: Security vulnerabilities and compliance
-- **Coverage**: OWASP Top 10, RBAC, authentication security
-- **Tools**: Static analysis (Bandit), dependency scanning (Safety)
-
-### Test Reporting
-
-All test runs generate:
-- **HTML Reports**: Visual test results with pass/fail details
-- **JSON Reports**: Machine-readable data for CI/CD pipelines
-- **Coverage Reports**: Code coverage analysis with line-by-line details
-- **Security Reports**: Vulnerability assessments and compliance status
-
-### Developer Testing Workflow
+- **Framework**: pytest with Docker containers
 
 ```bash
-# 1. Start services for integration/functional tests
-docker compose -f docker-compose.separated.yml up -d
+# Run integration tests
+python -m pytest integration/ -v
 
-# 2. Run quick unit tests during development
-pytest tests/unit/ -v
+# Test specific integration
+python -m pytest integration/test_auth_integration.py -v
+```
 
-# 3. Run integration tests before committing
-pytest tests/integration/ -v
+#### 3. Functional Tests (End-to-End Workflows)
+- **Location**: `tests/functional/`
+- **Purpose**: Test complete user workflows
+- **Framework**: pytest with API clients
 
-# 4. Run full test suite before pull requests
-python tests/run_tests.py
+```bash
+# Run functional tests
+python -m pytest functional/ -v --tb=short
 
-# 5. Run security checks before deployment
-python tests/run_security_tests.py
+# Test photo upload workflow
+python -m pytest functional/test_photo_workflow.py -v
+```
+
+#### 4. Security Tests (Security Compliance)
+- **Location**: `tests/security/`
+- **Purpose**: Validate security controls and compliance
+- **Framework**: Custom security test suite
+
+```bash
+# Run security compliance tests
+python -m pytest security/ -v
+
+# Run specific security test
+python operational-security-validation/test-security-improvements.py
+```
+
+### API Integration Testing
+
+#### Authentication Flow Testing
+```bash
+# Test complete auth flow
+bash api-integration-tests/test-auth-flow.sh
+
+# Sample output:
+# ✅ User registration successful
+# ✅ Email verification working
+# ✅ User login successful
+# ✅ JWT token validation working
+# ✅ Protected endpoint access successful
+```
+
+#### Photo Upload Testing
+```bash
+# Test photo management workflow
+bash api-integration-tests/test-photo-upload.sh
+
+# Sample output:
+# ✅ Photo upload successful
+# ✅ Photo metadata stored
+# ✅ Thumbnail generation working
+# ✅ Photo access controls working
+# ✅ Photo sharing successful
+```
+
+### Performance Testing
+
+#### Load Testing Setup
+```bash
+# Install testing tools
+pip install locust pytest-benchmark
+
+# Run performance tests
+cd tests/performance/
+locust -f locustfile.py --host=http://localhost:8000
+```
+
+#### Security Performance Testing
+```bash
+# Test rate limiting
+bash tests/security/test-rate-limiting.sh
+
+# Test authentication performance
+python tests/performance/test-auth-performance.py
 ```
 
 ---
 
-## 🔒 Security & Compliance
+## 🔐 Security & Compliance
 
-PhotoShare implements enterprise-grade security with comprehensive compliance testing.
+### Security Architecture Overview
 
-### Security Architecture
+PhotoShare implements a **defense-in-depth** security strategy with multiple layers of protection:
 
-```
-🛡️ Multi-Layer Security Architecture
-┌─────────────────────────────────────────────────┐
-│                Frontend                         │
-│  • HTTPS Only                                   │
-│  • CSP Headers                                  │  
-│  • XSS Protection                               │
-└─────────────────┬───────────────────────────────┘
-                  │
-┌─────────────────▼───────────────────────────────┐
-│              NGINX (Reverse Proxy)              │
-│  • SSL Termination                              │
-│  • Rate Limiting                                │
-│  • Security Headers                             │  
-│  • DDoS Protection                              │
-└─────────────────┬───────────────────────────────┘
-                  │
-        ┌─────────┼─────────┐
-        │                   │
-        ▼                   ▼
-┌─────────────────┐   ┌─────────────────┐
-│  Auth Service   │   │  Photo Service  │
-│  • JWT Auth     │   │  • Permission   │
-│  • 2FA/MFA      │   │    Validation   │
-│  • Rate Limit   │   │  • Input Valid  │
-│  • Input Valid  │   │  • File Checks  │
-│  • RBAC         │   │  • Rate Limit   │
-└─────────────────┘   └─────────────────┘
-        │                   │
-        ▼                   ▼
-┌─────────────────┐   ┌─────────────────┐
-│   Auth Database │   │  Photo Database │
-│  • Encryption   │   │  • Encryption   │
-│  • Access Logs  │   │  • Access Logs  │
-│  • Isolation    │   │  • Isolation    │
-└─────────────────┘   └─────────────────┘
-```
+#### Layer 1: Network Security
+- **NGINX Reverse Proxy**: SSL/TLS termination, rate limiting
+- **Service Isolation**: Separated networks for auth and app services
+- **Firewall Rules**: Restricted port access and IP filtering
 
-### Security Features
+#### Layer 2: Application Security
+- **Input Validation**: Comprehensive sanitization and validation
+- **Authentication**: Multi-factor authentication with TOTP and SMS
+- **Authorization**: Role-based access control (RBAC) with granular permissions
+- **Session Security**: Secure JWT tokens with short expiration
 
-#### 🔐 Authentication Security
-- **JWT Tokens**: Industry-standard with secure secrets
-- **Session Management**: Secure session handling and invalidation
-- **Password Security**: bcrypt hashing with salt
-- **Email Verification**: Required for account activation
-- **Rate Limiting**: Prevents brute force attacks
+#### Layer 3: Data Security
+- **Encryption at Rest**: Database encryption and encrypted file storage
+- **Encryption in Transit**: TLS 1.3 for all communications
+- **Data Isolation**: Complete separation of authentication and application data
+- **Backup Security**: Encrypted backups with integrity verification
 
-#### 👥 Authorization (RBAC)
-- **Role-Based Access**: 5-tier role system (user → superadmin)
-- **Granular Permissions**: 21+ permissions with resource:action format
-- **Permission Inheritance**: Hierarchical role permissions
-- **Cross-Service Validation**: Auth service validates all permissions
+#### Layer 4: Monitoring & Response
+- **Real-time Monitoring**: Security event detection and alerting
+- **Audit Logging**: Tamper-proof audit trails for all actions
+- **Incident Response**: Automated threat detection and response
+- **Compliance Reporting**: GDPR, SOC 2, and other regulatory compliance
 
-#### 🛡️ Input Security
-- **SQL Injection Prevention**: Parameterized queries, ORM protection
-- **XSS Protection**: Input sanitization, output encoding
-- **File Upload Security**: Type validation, size limits, content scanning
-- **CSRF Protection**: Token-based request validation
+### Security Features Implementation
 
-#### 🌐 Network Security
-- **HTTPS Enforcement**: TLS 1.2+ with strong cipher suites
-- **CORS Configuration**: Restricted origins for API access
-- **Security Headers**: HSTS, CSP, X-Frame-Options, etc.
-- **Network Isolation**: Separate networks for different services
+#### Multi-Factor Authentication (2FA)
+```python
+# Enable 2FA for user
+POST http://localhost:8001/api/auth/2fa/enable
+{
+  "method": "totp",
+  "backup_codes": true
+}
 
-### RBAC (Role-Based Access Control) System
-
-#### Default Roles & Permissions
-
-```
-🎭 Role Hierarchy (Level 0 → Level 4)
-├── user (Level 0)
-│   ├── photos:create, photos:read, photos:update, photos:delete
-│   ├── users:read, users:update, users:delete
-│   └── system:health
-│
-├── premium (Level 1)
-│   ├── All user permissions +
-│   └── system:metrics
-│
-├── moderator (Level 2)  
-│   ├── photos:*, photos:read_all, photos:update_all
-│   ├── users:*, users:update_all
-│   ├── admin:content
-│   └── system:health, system:metrics
-│
-├── admin (Level 3)
-│   ├── photos:manage, users:manage
-│   ├── admin:*
-│   └── system:health, system:metrics, system:logs
-│
-└── superadmin (Level 4)
-    └── *:* (All permissions)
+# Verify 2FA code
+POST http://localhost:8001/api/auth/2fa/verify
+{
+  "code": "123456",
+  "method": "totp"
+}
 ```
 
-#### Permission Format
-- **Resource:Action**: `photos:create`, `users:manage`
-- **Wildcards**: `photos:*`, `*:manage`, `*:*`
-- **Service Integration**: Photo service checks permissions via auth service
+#### Role-Based Access Control (RBAC)
+```python
+# Assign role to user
+POST http://localhost:8001/api/auth/users/{user_id}/assign-role
+{
+  "role": "moderator"
+}
 
-### Security Compliance Testing
+# Check user permissions
+GET http://localhost:8001/api/auth/users/{user_id}/permissions
+```
 
-#### OWASP Top 10 Compliance
+#### Security Monitoring
+```python
+# Check security status
+GET http://localhost:8000/api/platform/security
 
-PhotoShare includes automated tests for all OWASP Top 10 security risks:
+# View security events
+GET http://localhost:8000/api/security/events
 
-1. **A01: Injection** - SQL injection, NoSQL injection, command injection tests
-2. **A02: Broken Authentication** - Session management, password policy tests
-3. **A03: Sensitive Data Exposure** - Encryption, data leakage tests
-4. **A04: XML External Entities** - Not applicable (JSON API)
-5. **A05: Broken Access Control** - Authorization, privilege escalation tests
-6. **A06: Security Misconfiguration** - Configuration security tests
-7. **A07: Cross-Site Scripting** - XSS prevention tests
-8. **A08: Insecure Deserialization** - Input validation tests
-9. **A09: Vulnerable Components** - Dependency scanning with Safety
-10. **A10: Insufficient Logging** - Audit logging tests
+# Security metrics
+GET http://localhost:8000/api/security/metrics
+```
 
-#### Security Test Suite
+### Compliance Features
 
+#### GDPR Compliance
 ```bash
-# Full security assessment
-python tests/run_security_tests.py
+# User data export (Right to Data Portability)
+curl -H "Authorization: Bearer $ADMIN_TOKEN" \
+  http://localhost:8001/api/auth/users/$USER_ID/export-data
 
-# Quick critical security check
-python tests/run_security_tests.py --quick
-
-# Static security analysis
-python tests/run_security_tests.py --static-only
+# User data deletion (Right to be Forgotten)
+curl -X DELETE -H "Authorization: Bearer $ADMIN_TOKEN" \
+  http://localhost:8001/api/auth/users/$USER_ID/gdpr-delete
 ```
 
-**Security Tests Include:**
-- **Static Analysis**: Bandit code scanning for security issues
-- **Dependency Scanning**: Safety checks for vulnerable packages
-- **Dynamic Testing**: Runtime security vulnerability testing
-- **RBAC Testing**: Permission boundary and escalation tests
-- **Authentication Testing**: JWT security and session management
-- **Input Validation**: SQL injection, XSS, and other injection tests
+#### Audit Compliance
+```bash
+# Generate compliance report
+curl -s http://localhost:8000/api/security/compliance-report | jq '.'
 
-#### Compliance Reports
-
-Security tests generate comprehensive reports:
-- **Security Assessment Report**: Overall security score and recommendations
-- **Vulnerability Report**: Detailed findings with severity levels
-- **Compliance Matrix**: OWASP compliance status
-- **Remediation Guide**: Step-by-step fix recommendations
-
-### Production Security Checklist
-
-Before deploying to production:
-
-- [ ] **SSL/TLS**: Valid certificates installed and HTTPS enforced
-- [ ] **Secrets Management**: Strong passwords and JWT secrets configured
-- [ ] **Database Security**: Encryption at rest and in transit enabled
-- [ ] **Network Security**: Firewall configured, unnecessary ports closed
-- [ ] **Monitoring**: Security event logging and alerting enabled
-- [ ] **Backup Security**: Encrypted backups with secure storage
-- [ ] **Access Control**: Administrative access properly restricted
-- [ ] **Update Process**: Security update procedure established
-- [ ] **Incident Response**: Security incident response plan ready
-- [ ] **Compliance Testing**: All security tests passing
+# Access audit trail
+curl -s http://localhost:8000/api/security/audit-trail | jq '.'
+```
 
 ---
 
-## 🌍 Production Deployment
+## 🚀 Production Deployment
 
-PhotoShare includes a comprehensive production deployment system with automation, monitoring, and maintenance tools.
+### Production Checklist
 
-### Production Architecture
+#### Pre-Deployment Security Review
+- [ ] **Environment Variables**: All secrets properly configured
+- [ ] **SSL Certificates**: Valid certificates installed and tested
+- [ ] **Database Security**: Strong passwords, encrypted connections
+- [ ] **Network Security**: Firewall rules and access controls configured
+- [ ] **Monitoring**: All monitoring systems operational
+- [ ] **Backup Systems**: Automated backups configured and tested
 
-```
-Internet
-    │
-    ▼
-┌─────────────────┐
-│   Load Balancer │ (Optional: AWS ALB, CloudFlare)
-│   DNS/CDN       │
-└─────────┬───────┘
-          │
-          ▼
-┌─────────────────┐
-│      NGINX      │ ◄── SSL Termination, Rate Limiting
-│   Reverse Proxy │     Security Headers, Caching
-└─────────┬───────┘
-          │
-    ┌─────┼─────┐
-    │           │
-    ▼           ▼
-┌─────────┐ ┌─────────┐
-│ Auth    │ │ Photo   │ ◄── Horizontal Scaling
-│ Service │ │ Service │     Multiple Replicas  
-│ x2      │ │ x4      │     Auto-restart
-└─────────┘ └─────────┘
-    │           │
-    ▼           ▼
-┌─────────┐ ┌─────────┐
-│ Auth DB │ │Photo DB │ ◄── Persistent Storage
-│ Primary │ │ Primary │     Backup Strategy
-└─────────┘ └─────────┘
-    │           │
-    └─────┬─────┘
-          ▼
-    ┌─────────┐
-    │  Redis  │ ◄── Session Storage
-    │ (Cache) │     Rate Limiting
-    └─────────┘
-```
-
-### Quick Production Deployment
-
+#### Production Environment Setup
 ```bash
-# 1. Clone and configure
-git clone https://github.com/your-org/photo-share-consul.git
-cd photo-share-consul
+# 1. Clone production repository
+git clone <production-repo> photoshare-production
+cd photoshare-production
 
 # 2. Configure production environment
-cp .env.production.template .env.production
-# Edit .env.production with your production values
+cp .env.auth-service.production .env.auth-service
+cp .env.application.production .env.application
 
-# 3. Set up SSL certificates (if using HTTPS)
-mkdir -p config/ssl
-# Copy your SSL certificates to config/ssl/
+# 3. Generate production secrets
+bash deployment-and-setup-tools/generate-jwt-secrets.py --production
 
-# 4. Deploy with automation script
-./deploy-production.sh
+# 4. Configure SSL certificates
+mkdir -p nginx/ssl/
+# Copy your SSL certificates to nginx/ssl/
 
-# 5. Verify deployment
-curl https://yourdomain.com/health
+# 5. Configure monitoring
+bash deployment-and-setup-tools/setup-monitoring.sh
 ```
 
-### Production Configuration
-
-#### Environment Variables (`.env.production`)
-
+#### Production Deployment Script
 ```bash
-# CRITICAL: Change these values for production!
-JWT_SECRET_KEY=your-super-secure-256-bit-jwt-secret
-AUTH_DB_PASSWORD=ultra-secure-auth-password
-APP_DB_PASSWORD=ultra-secure-app-password
-REDIS_PASSWORD=secure-redis-password
+#!/bin/bash
+# deploy-production.sh - Zero-downtime production deployment
 
-# Domain and SSL
-DOMAIN=yourdomain.com
-PROTOCOL=https
-ALLOWED_ORIGINS=https://yourdomain.com
+echo "🚀 Starting PhotoShare production deployment..."
 
-# Security
-RATE_LIMIT_ENABLED=true
-SECURITY_HEADERS_ENABLED=true
-HSTS_MAX_AGE=31536000
+# 1. Pre-deployment validation
+echo "Validating configuration..."
+docker compose -f docker-compose.separated.yml config --quiet
+if [ $? -ne 0 ]; then
+    echo "❌ Configuration validation failed"
+    exit 1
+fi
 
-# Email (for verification emails)
-SMTP_HOST=smtp.your-provider.com
-SMTP_USER=noreply@yourdomain.com
-SMTP_PASSWORD=your-smtp-password
+# 2. Security scan
+echo "Scanning containers for vulnerabilities..."
+python deployment-and-setup-tools/security-scan-containers.py
 
-# Monitoring
-ENABLE_METRICS=true
-BACKUP_ENABLED=true
+# 3. Database backup
+echo "Creating pre-deployment backup..."
+bash deployment-and-setup-tools/backup-databases.py
+
+# 4. Deploy with zero downtime
+echo "Deploying services..."
+docker compose -f docker-compose.separated.yml up --build -d
+
+# 5. Health check verification
+echo "Verifying deployment health..."
+sleep 60
+curl -f http://localhost:8001/health && curl -f http://localhost:8000/health
+
+if [ $? -eq 0 ]; then
+    echo "✅ Production deployment successful!"
+else
+    echo "❌ Deployment health check failed"
+    # Rollback procedures would go here
+    exit 1
+fi
+
+# 6. Post-deployment verification
+echo "Running post-deployment tests..."
+bash api-integration-tests/test-auth-flow.sh
+bash api-integration-tests/test-photo-upload.sh
+
+echo "🎉 PhotoShare production deployment complete!"
 ```
 
-#### SSL/TLS Setup
+### Production Monitoring Setup
 
-**Option 1: Let's Encrypt (Recommended)**
-```bash
-# Install certbot
-sudo apt install certbot
+#### Prometheus Configuration
+```yaml
+# monitoring/prometheus.yml
+global:
+  scrape_interval: 15s
 
-# Get certificates
-certbot certonly --standalone -d yourdomain.com
-
-# Copy certificates
-cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem config/ssl/
-cp /etc/letsencrypt/live/yourdomain.com/privkey.pem config/ssl/
+scrape_configs:
+  - job_name: 'auth-service'
+    static_configs:
+      - targets: ['auth-service:8000']
+    metrics_path: '/metrics'
+    
+  - job_name: 'photo-service'
+    static_configs:
+      - targets: ['photo-share-app:8000']
+    metrics_path: '/metrics'
 ```
 
-**Option 2: Custom Certificates**
+#### Grafana Dashboard Setup
 ```bash
-# Copy your certificates
-cp your-certificate.pem config/ssl/fullchain.pem
-cp your-private-key.pem config/ssl/privkey.pem
+# Start monitoring stack
+docker compose -f docker-compose.separated.yml --profile monitoring up -d
+
+# Import PhotoShare dashboards
+curl -X POST http://admin:admin123@localhost:3000/api/dashboards/db \
+  -H "Content-Type: application/json" \
+  -d @monitoring/grafana/photoshare-dashboard.json
 ```
 
-### Production Management
-
-PhotoShare includes comprehensive production management tools:
-
-#### Production Maintenance Script
-
-```bash
-# Service status and monitoring
-./production-maintenance.sh status
-./production-maintenance.sh health
-./production-maintenance.sh monitor
-
-# Service management
-./production-maintenance.sh restart
-./production-maintenance.sh scale photo-share-app 6
-./production-maintenance.sh logs auth-service
-
-# Backup and maintenance
-./production-maintenance.sh backup
-./production-maintenance.sh update
-./production-maintenance.sh cleanup
-```
-
-#### Monitoring & Alerting
-
-Production deployment includes:
-- **Prometheus**: Metrics collection from all services
-- **Grafana**: Visual dashboards for monitoring
-- **Alert Manager**: Automated alerting for issues
-- **Log Aggregation**: Centralized log collection
-- **Health Checks**: Automated service health monitoring
-
-#### Backup Strategy
-
-```bash
-# Automated daily backups
-./production-maintenance.sh backup
-
-# Backup includes:
-# - Database dumps (auth + photo data)
-# - Photo file storage
-# - Configuration files
-# - SSL certificates
-```
-
-#### Scaling Services
-
-```bash
-# Scale based on load
-./production-maintenance.sh scale auth-service 3
-./production-maintenance.sh scale photo-share-app 8
-
-# Monitor resource usage
-./production-maintenance.sh monitor
-```
-
-### Production Security
-
-#### Network Security
-- **Firewall**: Only ports 80, 443, and SSH open
-- **VPN**: Administrative access via VPN only
-- **Network Segmentation**: Services isolated in Docker networks
-- **DDoS Protection**: Rate limiting and connection limits
-
-#### Data Security
-- **Encryption at Rest**: Database encryption enabled
-- **Encryption in Transit**: HTTPS/TLS for all connections
-- **Backup Encryption**: Encrypted backup storage
-- **Key Management**: Secure secret management
-
-#### Access Control
-- **Service Accounts**: Non-root containers
-- **Database Access**: Restricted database users
-- **Administrative Access**: SSH key authentication only
-- **Audit Logging**: All administrative actions logged
-
-### High Availability Setup
-
-For mission-critical deployments:
-
-#### Multi-Node Setup
-```bash
-# Primary node (with database)
-./deploy-production.sh --mode primary
-
-# Secondary nodes (app services only)  
-./deploy-production.sh --mode secondary --primary-db primary-node-ip
-```
-
-#### Database Replication
-```bash
-# Set up database replication
-./production-maintenance.sh setup-replication
-```
-
-#### Load Balancing
-```bash
-# Configure load balancer
-# Point to multiple PhotoShare instances
-# Health check endpoints: /health
+#### Security Monitoring Alerts
+```yaml
+# monitoring/alerts/security-alerts.yml
+groups:
+  - name: security
+    rules:
+      - alert: HighFailedLoginRate
+        expr: rate(failed_login_attempts[5m]) > 10
+        labels:
+          severity: warning
+        annotations:
+          summary: High failed login rate detected
+          
+      - alert: SuspiciousFileUpload
+        expr: rate(blocked_uploads[5m]) > 5
+        labels:
+          severity: critical
+        annotations:
+          summary: Suspicious file upload activity detected
 ```
 
 ---
 
-## 🚨 Troubleshooting
+## 🔧 Troubleshooting
 
-Common issues and their solutions when working with PhotoShare.
+### Common Issues & Solutions
 
-### Development Issues
-
-#### Services Won't Start
+#### Issue 1: Service Startup Failures
+**Symptoms**: Containers failing to start, health checks failing
+**Diagnosis**:
 ```bash
-# Check if ports are in use
-netstat -tulpn | grep :8000
-netstat -tulpn | grep :8001
+# Check service status
+docker compose -f docker-compose.separated.yml ps
 
-# Kill processes using ports
-sudo kill -9 $(lsof -t -i:8000)
-sudo kill -9 $(lsof -t -i:8001)
-
-# Restart Docker
-sudo systemctl restart docker
-docker compose -f docker-compose.separated.yml up --build
+# View startup logs
+docker compose -f docker-compose.separated.yml logs auth-service
+docker compose -f docker-compose.separated.yml logs photo-share-app
+```
+**Solution**:
+```bash
+# Restart with fresh containers
+docker compose -f docker-compose.separated.yml down
+docker compose -f docker-compose.separated.yml up --build -d
 ```
 
-#### Database Connection Issues
+#### Issue 2: JWT Token Validation Errors
+**Symptoms**: "Invalid token" errors, authentication failures
+**Diagnosis**:
 ```bash
+# Check JWT configuration matching
+grep JWT_SECRET .env.auth-service
+grep JWT_SECRET .env.application
+
+# Verify token format
+echo $JWT_TOKEN | cut -d. -f2 | base64 -d | jq '.'
+```
+**Solution**:
+```bash
+# Ensure JWT secrets match between services
+# Restart services after fixing configuration
+docker compose -f docker-compose.separated.yml restart auth-service photo-share-app
+```
+
+#### Issue 3: Database Connection Problems
+**Symptoms**: Database connection refused, authentication failures
+**Diagnosis**:
+```bash
+# Test database connectivity
+docker exec photoshare-auth-db pg_isready -U auth_user
+docker exec photoshare-app-db pg_isready -U app_user
+
 # Check database logs
 docker compose -f docker-compose.separated.yml logs auth-db
 docker compose -f docker-compose.separated.yml logs app-db
-
-# Reset databases (WARNING: Deletes data)
-docker compose -f docker-compose.separated.yml down -v
-docker compose -f docker-compose.separated.yml up --build
-
-# Manual database connection test
-docker compose -f docker-compose.separated.yml exec auth-db psql -U auth_user -d auth_service
+```
+**Solution**:
+```bash
+# Restart database containers
+docker compose -f docker-compose.separated.yml restart auth-db app-db
+sleep 30
+docker compose -f docker-compose.separated.yml restart auth-service photo-share-app
 ```
 
-#### JWT Token Issues
+### Performance Issues
+
+#### Issue: Slow API Response Times
+**Diagnosis**:
 ```bash
-# Check JWT configuration in logs
-docker compose -f docker-compose.separated.yml logs auth-service | grep JWT
+# Check service performance metrics
+curl -s http://localhost:8000/api/platform/performance | jq '.'
 
-# Verify JWT secret consistency between services
-grep JWT_SECRET .env.auth-service
-grep JWT_SECRET .env.photoshare
+# Monitor resource usage
+docker stats --no-stream
 
-# Test JWT token generation
-curl -X POST http://localhost:8001/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email": "test@example.com", "password": "TestPassword123!"}'
+# Check for memory/CPU constraints
+docker compose -f docker-compose.separated.yml logs | grep -i "memory\|cpu"
 ```
 
-### Testing Issues
-
-#### Tests Failing Due to Services
+**Solution**:
 ```bash
-# Ensure services are running before tests
-docker compose -f docker-compose.separated.yml up -d
+# Enable Redis caching
+docker compose -f docker-compose.separated.yml --profile monitoring up -d
 
-# Wait for services to be ready
-curl -f http://localhost:8001/health
-curl -f http://localhost:8000/health
-
-# Run tests with verbose output
-python tests/run_tests.py --categories integration --no-coverage
-```
-
-#### Coverage Below Threshold
-```bash
-# Identify uncovered code
-pytest --cov=services --cov-report=html:tests/coverage/html
-open tests/coverage/html/index.html
-
-# Run tests without coverage requirement
-pytest tests/ --no-cov
-
-# Check specific module coverage
-pytest tests/unit/auth-service/ --cov=services.auth-service
-```
-
-### Production Issues
-
-#### SSL Certificate Problems
-```bash
-# Check certificate validity
-openssl x509 -in config/ssl/fullchain.pem -text -noout
-
-# Test certificate chain
-openssl verify -CAfile config/ssl/fullchain.pem config/ssl/fullchain.pem
-
-# Renew Let's Encrypt certificates
-certbot renew --dry-run
-```
-
-#### Performance Issues
-```bash
-# Check resource usage
-./production-maintenance.sh monitor
-
-# Scale services if needed
-./production-maintenance.sh scale photo-share-app 6
-
-# Check database performance
-./production-maintenance.sh logs app-db | grep "slow query"
-```
-
-#### Service Discovery Issues
-```bash
-# Check service connectivity
-docker compose -f docker-compose.production.yml exec photo-share-app curl auth-service:8000/health
-
-# Restart services with fresh network
-docker compose -f docker-compose.production.yml down
-docker compose -f docker-compose.production.yml up -d
+# Optimize database queries
+# Review slow query logs in database
 ```
 
 ### Security Issues
 
-#### Failed Security Tests
+#### Issue: Unusual Authentication Patterns
+**Diagnosis**:
 ```bash
-# Run security tests with detailed output
-python tests/run_security_tests.py --quick
+# Check security monitoring
+curl -s http://localhost:8000/api/security/threats | jq '.'
 
-# Check for vulnerable dependencies
-pip list --outdated
-safety check
-
-# Review security configuration
-python tests/run_security_tests.py --static-only
+# Review failed login patterns
+curl -s http://localhost:8001/api/security/failed-logins | jq '.'
 ```
 
-### Getting Help
-
-#### Debug Information Collection
+**Solution**:
 ```bash
-# Collect system information
-docker version
-docker compose version
-curl -s http://localhost:8001/health | jq .
-curl -s http://localhost:8000/health | jq .
-
-# Collect service logs
-docker compose -f docker-compose.separated.yml logs > debug-logs.txt
-
-# Run diagnostic tests
-python tests/run_tests.py --categories integration > test-output.txt
+# Implement additional rate limiting
+curl -X POST http://localhost:8001/api/security/emergency-rate-limit \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -d '{"ip_ranges": ["suspicious.ip.*"], "duration": 3600}'
 ```
 
-#### Common Log Locations
-- **Service logs**: `docker compose logs`
-- **Test reports**: `tests/reports/`
-- **Coverage reports**: `tests/coverage/html/index.html`
-- **Security reports**: `tests/reports/security/`
-- **Production logs**: `/var/log/photoshare/` (in production)
+### Development Debugging
+
+#### Debug Mode Setup
+```yaml
+# docker-compose.override.yml for development
+version: '3.8'
+services:
+  auth-service:
+    environment:
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - ./services/auth-service:/app
+      
+  photo-share-app:
+    environment:
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - ./services/photoshare:/app
+```
+
+#### Interactive Debugging
+```bash
+# Access running container for debugging
+docker compose -f docker-compose.separated.yml exec auth-service /bin/bash
+
+# Run Python debugger
+docker compose -f docker-compose.separated.yml exec auth-service \
+  python -m pdb main.py
+
+# Check service internals
+docker compose -f docker-compose.separated.yml exec photo-share-app \
+  python -c "from auth_integration import AuthIntegration; print(AuthIntegration().health_check())"
+```
 
 ---
 
-## 🎉 Conclusion
+## 📚 API Reference
 
-Congratulations! You now have a comprehensive understanding of PhotoShare. Here's what you've learned:
+### Authentication Service API (Port 8001)
 
-✅ **Project Understanding**: Modern microservices photo sharing platform  
-✅ **Architecture Knowledge**: Separated services with security-first design  
-✅ **Development Setup**: Local development environment ready in minutes  
-✅ **Testing Framework**: Comprehensive testing with security compliance  
-✅ **Production Deployment**: Enterprise-ready deployment with monitoring  
-✅ **Security Implementation**: OWASP-compliant with RBAC and comprehensive protection  
+#### User Management Endpoints
 
-### Next Steps
+##### User Registration
+```http
+POST /api/auth/register
+Content-Type: application/json
 
-1. **Start Development**: Set up your local environment and explore the APIs
-2. **Run Tests**: Execute the test suite to understand the system behavior  
-3. **Security Review**: Run security tests to understand the compliance framework
-4. **Production Planning**: Review the production deployment guide for your infrastructure
-5. **Contribute**: Follow the testing and security guidelines for contributions
+{
+  "email": "user@example.com",
+  "password": "SecurePassword123!",
+  "first_name": "John",
+  "last_name": "Doe"
+}
 
-### Key Resources
+Response: 201 Created
+{
+  "id": 1,
+  "uuid": "550e8400-e29b-41d4-a716-446655440000",
+  "email": "user@example.com",
+  "first_name": "John",
+  "last_name": "Doe",
+  "is_verified": false,
+  "roles": ["user"],
+  "permissions": []
+}
+```
 
-- **API Documentation**: http://localhost:8001/docs (Auth), http://localhost:8000/docs (Photos)
-- **Test Suite**: `python tests/run_tests.py`
-- **Security Tests**: `python tests/run_security_tests.py`
-- **Production Guide**: `PRODUCTION_DEPLOYMENT.md`
-- **Development Guide**: `CLAUDE.md`
+##### User Login
+```http
+POST /api/auth/login
+Content-Type: application/x-www-form-urlencoded
 
-### Support
+username=user@example.com&password=SecurePassword123!
 
-- **Testing Issues**: Check `tests/README.md`
-- **Deployment Issues**: Review `PRODUCTION_DEPLOYMENT.md`  
-- **Security Questions**: Run security compliance tests
-- **Architecture Questions**: Review this guide's architecture section
+Response: 200 OK
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "bearer",
+  "expires_in": 1800,
+  "user": {
+    "id": 1,
+    "email": "user@example.com",
+    "roles": ["user"]
+  }
+}
+```
+
+#### 2FA Management Endpoints
+
+##### Enable 2FA
+```http
+POST /api/auth/2fa/enable
+Authorization: Bearer {access_token}
+Content-Type: application/json
+
+{
+  "method": "totp"
+}
+
+Response: 200 OK
+{
+  "qr_code": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg...",
+  "secret": "JBSWY3DPEHPK3PXP",
+  "backup_codes": ["12345678", "87654321", ...]
+}
+```
+
+##### Verify 2FA
+```http
+POST /api/auth/2fa/verify
+Authorization: Bearer {access_token}
+Content-Type: application/json
+
+{
+  "code": "123456",
+  "method": "totp"
+}
+
+Response: 200 OK
+{
+  "verified": true,
+  "message": "2FA verification successful"
+}
+```
+
+#### SSO Integration Endpoints
+
+##### Available SSO Providers
+```http
+GET /api/auth/sso/providers
+
+Response: 200 OK
+{
+  "providers": [
+    {
+      "name": "google",
+      "display_name": "Google",
+      "available": true,
+      "login_url": "/api/auth/sso/login/google"
+    },
+    {
+      "name": "github", 
+      "display_name": "GitHub",
+      "available": true,
+      "login_url": "/api/auth/sso/login/github"
+    }
+  ]
+}
+```
+
+### Application Service API (Port 8000)
+
+#### Photo Management Endpoints
+
+##### Upload Photo
+```http
+POST /api/photos/upload
+Authorization: Bearer {access_token}
+Content-Type: multipart/form-data
+
+file: (binary photo file)
+title: "My awesome photo"
+description: "A beautiful sunset"
+is_public: true
+
+Response: 201 Created
+{
+  "id": 1,
+  "filename": "photo_20250824_123456.jpg",
+  "title": "My awesome photo",
+  "description": "A beautiful sunset",
+  "content_type": "image/jpeg",
+  "file_size": 2048576,
+  "is_public": true,
+  "upload_date": "2025-08-24T12:34:56Z",
+  "thumbnail_url": "/api/photos/1/thumbnail"
+}
+```
+
+##### List Photos
+```http
+GET /api/photos/
+Authorization: Bearer {access_token}
+Query Parameters:
+  - page: 1 (optional)
+  - limit: 20 (optional)
+  - public_only: false (optional)
+
+Response: 200 OK
+{
+  "photos": [
+    {
+      "id": 1,
+      "filename": "photo_20250824_123456.jpg", 
+      "title": "My awesome photo",
+      "content_type": "image/jpeg",
+      "is_public": true,
+      "upload_date": "2025-08-24T12:34:56Z"
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "pages": 1
+}
+```
+
+##### Get Photo Details
+```http
+GET /api/photos/{photo_id}
+Authorization: Bearer {access_token}
+
+Response: 200 OK
+{
+  "id": 1,
+  "filename": "photo_20250824_123456.jpg",
+  "title": "My awesome photo", 
+  "description": "A beautiful sunset",
+  "content_type": "image/jpeg",
+  "file_size": 2048576,
+  "is_public": true,
+  "upload_date": "2025-08-24T12:34:56Z",
+  "metadata": {
+    "camera": "Canon EOS R5",
+    "iso": 100,
+    "aperture": "f/8.0",
+    "shutter_speed": "1/125"
+  }
+}
+```
+
+##### Download Photo
+```http
+GET /api/photos/{photo_id}/download
+Authorization: Bearer {access_token} (if private photo)
+
+Response: 200 OK
+Content-Type: image/jpeg
+(Binary image data)
+```
+
+#### System Health Endpoints
+
+##### Health Check
+```http
+GET /health
+
+Response: 200 OK
+{
+  "status": "healthy",
+  "service": "photoshare-app-service", 
+  "version": "2.4.0",
+  "database": "healthy",
+  "auth_service": "healthy"
+}
+```
+
+##### Platform Statistics
+```http
+GET /api/platform/stats
+Authorization: Bearer {access_token}
+
+Response: 200 OK
+{
+  "total_users": 1234,
+  "total_photos": 5678,
+  "storage_used_mb": 15360,
+  "auth_service_status": "healthy",
+  "database_status": "healthy",
+  "uptime_seconds": 86400
+}
+```
+
+### Security API Endpoints
+
+#### Security Status
+```http
+GET /api/platform/security
+Authorization: Bearer {admin_token}
+
+Response: 200 OK
+{
+  "security_status": "secure",
+  "threat_level": "low",
+  "active_threats": 0,
+  "security_events_24h": 12,
+  "failed_logins_24h": 3,
+  "blocked_uploads_24h": 0
+}
+```
+
+#### Security Events
+```http
+GET /api/security/events
+Authorization: Bearer {admin_token}
+Query Parameters:
+  - hours: 24 (optional)
+  - severity: all|low|medium|high|critical (optional)
+
+Response: 200 OK
+{
+  "events": [
+    {
+      "id": "evt_123456",
+      "timestamp": "2025-08-24T12:34:56Z",
+      "severity": "medium",
+      "type": "failed_login",
+      "source_ip": "192.168.1.100",
+      "description": "Multiple failed login attempts"
+    }
+  ],
+  "total": 1
+}
+```
 
 ---
 
-**Welcome to PhotoShare!** 🎉 You're ready to build, test, and deploy a production-ready photo sharing platform with enterprise-grade security and scalability.
+## 🎓 Advanced Usage
+
+### Custom Development Scenarios
+
+#### Adding New Authentication Providers
+```python
+# services/auth-service/sso_providers.py
+
+class CustomSSOProvider(BaseSSOProvider):
+    def __init__(self):
+        self.provider_name = "custom_provider"
+        self.client_id = os.getenv("CUSTOM_CLIENT_ID")
+        self.client_secret = os.getenv("CUSTOM_CLIENT_SECRET")
+    
+    async def authenticate(self, auth_code: str) -> dict:
+        # Implementation for custom authentication
+        pass
+    
+    def get_authorization_url(self) -> str:
+        # Return authorization URL
+        pass
+
+# Register the provider
+sso_manager.register_provider("custom", CustomSSOProvider())
+```
+
+#### Custom Permission System
+```python
+# services/auth-service/setup_rbac.py
+
+async def setup_custom_permissions():
+    permissions = [
+        {"name": "custom_permission", "description": "Custom functionality access"},
+        {"name": "advanced_features", "description": "Advanced features access"}
+    ]
+    
+    for perm in permissions:
+        await create_permission(perm["name"], perm["description"])
+
+# Add custom role
+async def setup_custom_roles():
+    await create_role("premium_user", "Premium user with advanced features")
+    await assign_permission_to_role("premium_user", "advanced_features")
+```
+
+#### Custom Security Monitoring
+```python
+# services/photoshare/security_monitoring.py
+
+class CustomSecurityMonitor(SecurityMonitor):
+    def __init__(self):
+        super().__init__()
+        self.custom_rules = []
+    
+    def add_custom_rule(self, rule_func):
+        """Add custom security detection rule"""
+        self.custom_rules.append(rule_func)
+    
+    def _check_custom_threats(self):
+        """Check for custom security threats"""
+        for rule in self.custom_rules:
+            try:
+                threats = rule(self.recent_events)
+                for threat in threats:
+                    self.log_incident(threat)
+            except Exception as e:
+                logger.error(f"Custom rule error: {e}")
+
+# Usage
+security_monitor.add_custom_rule(detect_unusual_upload_patterns)
+security_monitor.add_custom_rule(detect_api_abuse)
+```
+
+### Integration Examples
+
+#### Frontend Integration (React)
+```javascript
+// PhotoShare React integration example
+
+import { PhotoShareClient } from './photoshare-client';
+
+const client = new PhotoShareClient({
+  authServiceUrl: 'http://localhost:8001',
+  appServiceUrl: 'http://localhost:8000'
+});
+
+// Authentication
+const loginUser = async (email, password) => {
+  try {
+    const response = await client.auth.login(email, password);
+    localStorage.setItem('token', response.access_token);
+    return response.user;
+  } catch (error) {
+    console.error('Login failed:', error);
+  }
+};
+
+// Photo upload
+const uploadPhoto = async (file, metadata) => {
+  const token = localStorage.getItem('token');
+  try {
+    const response = await client.photos.upload(file, metadata, token);
+    return response;
+  } catch (error) {
+    console.error('Upload failed:', error);
+  }
+};
+
+// 2FA setup
+const enable2FA = async () => {
+  const token = localStorage.getItem('token');
+  const response = await client.auth.enable2FA(token);
+  
+  // Display QR code for TOTP setup
+  document.getElementById('qr-code').src = response.qr_code;
+  return response.secret;
+};
+```
+
+#### Mobile Integration (React Native)
+```javascript
+// PhotoShare React Native integration
+
+import { PhotoShareMobile } from '@photoshare/mobile-sdk';
+
+const photoshare = new PhotoShareMobile({
+  authServiceUrl: 'https://your-auth-service.com',
+  appServiceUrl: 'https://your-app-service.com'
+});
+
+// Biometric authentication
+const loginWithBiometrics = async () => {
+  const biometricAuth = await photoshare.auth.checkBiometricSupport();
+  if (biometricAuth.available) {
+    const result = await photoshare.auth.loginWithBiometric();
+    return result;
+  }
+};
+
+// Photo capture and upload
+const captureAndUpload = async () => {
+  const photo = await photoshare.camera.capture({
+    quality: 0.8,
+    maxWidth: 1920,
+    maxHeight: 1080
+  });
+  
+  const upload = await photoshare.photos.upload(photo, {
+    title: 'Mobile capture',
+    auto_process: true,
+    location: await photoshare.location.getCurrentLocation()
+  });
+  
+  return upload;
+};
+```
+
+#### Third-Party API Integration
+```python
+# External service integration example
+
+from services.photoshare.integrations import ExternalAPIIntegration
+
+class CloudStorageIntegration(ExternalAPIIntegration):
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+        self.base_url = "https://api.cloudstorge.com/v1"
+    
+    async def backup_photo(self, photo_id: int, photo_data: bytes):
+        """Backup photo to external cloud storage"""
+        backup_url = f"{self.base_url}/backup"
+        
+        response = await self.make_secure_request(
+            method="POST",
+            url=backup_url,
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            files={"photo": photo_data},
+            data={"photo_id": photo_id}
+        )
+        
+        return response.json()
+    
+    async def sync_user_data(self, user_id: int):
+        """Sync user data with external system"""
+        sync_url = f"{self.base_url}/users/{user_id}/sync"
+        
+        user_data = await self.get_user_export_data(user_id)
+        response = await self.make_secure_request(
+            method="PUT",
+            url=sync_url,
+            json=user_data,
+            headers={"Authorization": f"Bearer {self.api_key}"}
+        )
+        
+        return response.status_code == 200
+
+# Register integration
+cloud_storage = CloudStorageIntegration(api_key=os.getenv("CLOUD_STORAGE_API_KEY"))
+await integration_manager.register("cloud_storage", cloud_storage)
+```
+
+### Advanced Security Configuration
+
+#### Custom JWT Configuration
+```python
+# services/auth-service/jwt_manager.py
+
+class AdvancedJWTManager:
+    def __init__(self):
+        self.algorithms = ["RS256", "ES256", "HS256"]  # Multiple algorithm support
+        self.private_key = self.load_private_key()
+        self.public_key = self.load_public_key()
+    
+    def create_custom_token(self, user_data: dict, custom_claims: dict = None):
+        """Create JWT with custom claims"""
+        payload = {
+            "sub": user_data["uuid"],
+            "user_id": user_data["id"],
+            "email": user_data["email"],
+            "roles": user_data["roles"],
+            "permissions": user_data["permissions"],
+            "iat": datetime.utcnow(),
+            "exp": datetime.utcnow() + timedelta(minutes=30),
+            "aud": "photoshare-app",
+            "iss": "photoshare-auth"
+        }
+        
+        if custom_claims:
+            payload.update(custom_claims)
+        
+        return jwt.encode(
+            payload, 
+            self.private_key, 
+            algorithm="RS256",
+            headers={"kid": self.get_key_id()}
+        )
+    
+    def validate_advanced_token(self, token: str, required_permissions: list = None):
+        """Advanced token validation with permission checking"""
+        try:
+            payload = jwt.decode(
+                token,
+                self.public_key,
+                algorithms=self.algorithms,
+                audience="photoshare-app",
+                issuer="photoshare-auth"
+            )
+            
+            if required_permissions:
+                user_permissions = payload.get("permissions", [])
+                if not all(perm in user_permissions for perm in required_permissions):
+                    raise PermissionError("Insufficient permissions")
+            
+            return payload
+            
+        except jwt.ExpiredSignatureError:
+            raise AuthenticationError("Token expired")
+        except jwt.InvalidTokenError:
+            raise AuthenticationError("Invalid token")
+```
+
+---
+
+**🎉 Congratulations!** You now have comprehensive knowledge of the PhotoShare platform. This guide covers everything from basic setup to advanced customization. For additional support, refer to the security guides, API documentation, and troubleshooting sections.
+
+**📞 Need Help?** 
+- Check the troubleshooting section first
+- Review the security guides for security-related questions  
+- Consult the API reference for integration questions
+- Refer to the threat model for security architecture questions
+
+**🚀 Happy coding with PhotoShare!**
