@@ -262,6 +262,55 @@ class FileStorageService:
     def get_file_url(self, storage_path: str) -> str:
         """Get signed URL for secure file access."""
         return self.generate_signed_url(storage_path)
+
+    # ------------------------------------------------------------------
+    # Generic payload signing -- added for the share-link download flow.
+    # Deliberately separate from generate_signed_url()/verify_signed_url()
+    # above (which are storage_path-only and still gated behind a login,
+    # see /api/photos/secure/{storage_path}). This variant signs an
+    # arbitrary payload (a share_token) and reports *why* verification
+    # failed, so callers can tell an expired link apart from a tampered
+    # or malformed one instead of a single opaque bool.
+    # ------------------------------------------------------------------
+
+    def sign_payload(self, payload: str, expires_in: int) -> Dict[str, Any]:
+        """HMAC-sign an arbitrary payload string with an expiration."""
+        expires_at = int(time.time()) + expires_in
+        message = f"{payload}:{expires_at}"
+        signature = hmac.new(
+            self.storage_secret.encode(),
+            message.encode(),
+            hashlib.sha256
+        ).hexdigest()
+        return {"signature": signature, "expires_at": expires_at}
+
+    def verify_signed_payload(self, payload: str, expires: str, signature: str) -> Dict[str, Any]:
+        """
+        Verify an HMAC-signed payload, distinguishing *why* it failed.
+
+        Returns {"valid": bool, "reason": "ok" | "expired" | "invalid_signature" | "malformed"}.
+        Signature is checked before expiration so an attacker can't learn
+        anything about validity by tampering with the expires value alone.
+        """
+        try:
+            expires_int = int(expires)
+        except (TypeError, ValueError):
+            return {"valid": False, "reason": "malformed"}
+
+        message = f"{payload}:{expires_int}"
+        expected_signature = hmac.new(
+            self.storage_secret.encode(),
+            message.encode(),
+            hashlib.sha256
+        ).hexdigest()
+
+        if not signature or not hmac.compare_digest(signature, expected_signature):
+            return {"valid": False, "reason": "invalid_signature"}
+
+        if time.time() > expires_int:
+            return {"valid": False, "reason": "expired"}
+
+        return {"valid": True, "reason": "ok"}
     
     async def health_check(self) -> Dict[str, Any]:
         """Check storage service health."""

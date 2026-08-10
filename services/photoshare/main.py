@@ -33,6 +33,13 @@ from waf_protection import waf_middleware, validate_file_upload_waf, waf
 from security_monitoring import security_monitor, log_security_event, AlertSeverity, ThreatType
 from exif_security import sanitize_uploaded_image, analyze_image_privacy_risks, exif_processor
 
+# Phase 1 product API routers (albums / shares / comments / tags / analytics)
+from routers.albums import router as albums_router
+from routers.shares import router as shares_router
+from routers.comments import router as comments_router
+from routers.tags import router as tags_router
+from routers.analytics import router as analytics_router
+
 # Import video processing components
 try:
     from video_processing import VideoProcessor, VideoSecurityValidator
@@ -184,6 +191,16 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
 )
+
+# Phase 1 product API routers -- albums, share links + signed downloads,
+# comments, tags, and analytics. Built directly on the existing Album /
+# PhotoShare / PhotoTag / PhotoComment / PhotoAnalytics models above, no
+# schema changes. See routers/shares.py for the signed-download design.
+app.include_router(albums_router)
+app.include_router(shares_router)
+app.include_router(comments_router)
+app.include_router(tags_router)
+app.include_router(analytics_router)
 
 # Add WAF protection middleware
 app.middleware("http")(waf_middleware)
