@@ -2,56 +2,59 @@
 # ===================================
 
 # Core FastAPI framework
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-python-multipart==0.0.6
+fastapi==0.141.1
+uvicorn[standard]==0.52.1
+python-multipart==0.0.32
 
 # Database (PostgreSQL async)
-sqlalchemy==2.0.23
-asyncpg==0.29.0
-alembic==1.13.1
+sqlalchemy==2.0.51
+asyncpg==0.31.0
+alembic==1.19.1
 
 # Authentication & Security
-python-jose[cryptography]==3.3.0
+python-jose[cryptography]==3.5.0
 passlib[bcrypt]==1.7.4
+# passlib is unmaintained; its bcrypt backend detection breaks outright on
+# bcrypt>=4.1 (removed attribute it relies on). Not a security downgrade --
+# bcrypt has no relevant advisory in the 4.0.x range.
 bcrypt==4.0.1
-cryptography>=42.0.0
+cryptography>=50.0.0
 
 # JWT handling
-pyjwt==2.8.0
+pyjwt==2.13.0
 
 # SSO & OAuth
-httpx==0.25.2
+httpx==0.28.1
 python-oauth2==1.1.1
 
 # 2FA Support
-pyotp==2.9.0
-qrcode[pil]==7.4.2
+pyotp==2.10.0
+qrcode[pil]==8.2
 
 # SMS providers
-twilio==8.10.3
-boto3==1.34.0  # For AWS SNS
+twilio==9.10.9
+boto3==1.43.68  # For AWS SNS
 
 # Redis for caching
-redis==5.0.1
+redis==8.1.0
 aioredis==2.0.1
 
 # Pydantic
-pydantic==2.5.3
-pydantic-core==2.14.6
-email-validator==2.1.0
+pydantic==2.13.4
+pydantic-core==2.46.4
+email-validator==2.3.0
 
 # Monitoring
-prometheus-client==0.19.0
+prometheus-client==0.26.0
 
 # Core dependencies
-requests==2.31.0
-aiohttp==3.9.1
-starlette==0.27.0
-typing-extensions==4.8.0
-python-dotenv==1.0.0
+requests==2.34.2
+aiohttp==3.14.3
+starlette==1.6.0
+typing-extensions==4.16.0
+python-dotenv==1.2.2
 
 # Security-critical packages
 Jinja2==3.1.6
-setuptools==78.1.1
-certifi==2024.7.4
+setuptools==84.0.0
+certifi==2026.7.22

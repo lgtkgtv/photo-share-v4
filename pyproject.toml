@@ -37,7 +37,12 @@ dependencies = [
     # Authentication & Security
     "python-jose[cryptography]>=3.3.0",
     "passlib[bcrypt]>=1.7.4",
-    "bcrypt>=4.0.1",
+    # passlib 1.7.4 is unmaintained (no release since 2020) and its bcrypt backend
+    # detects the installed bcrypt version via bcrypt.__about__.__version__, an
+    # attribute bcrypt removed in 4.1.0 -- anything >=4.1 breaks password hashing
+    # outright (ValueError from passlib's own internal self-test). Not a security
+    # downgrade: bcrypt itself has no relevant advisory in this range.
+    "bcrypt>=4.0.1,<4.1",
     "cryptography>=42.0.0",
     "pyjwt>=2.8.0",
     

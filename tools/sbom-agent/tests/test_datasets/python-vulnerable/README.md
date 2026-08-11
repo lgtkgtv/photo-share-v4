@@ -1,12 +1,20 @@
 # Python Vulnerable Test Dataset
 
-This test dataset contains intentionally vulnerable Python packages for demonstrating the SBOM Agent's vulnerability detection and remediation capabilities.
+This test dataset documents intentionally vulnerable Python package versions for
+demonstrating the SBOM Agent's vulnerability detection and remediation capabilities.
 
 ## ⚠️ WARNING
 
 **DO NOT USE THESE PACKAGE VERSIONS IN PRODUCTION**
 
-This dataset contains packages with known security vulnerabilities and is intended solely for testing and demonstration purposes.
+**`requirements.txt` and `requirements_fixed.txt` are intentionally NOT committed here.**
+This directory previously committed them directly, which is exactly what this file's own
+warning says not to do -- and it was the single largest source of noise in this repo's
+GitHub Dependabot alerts (roughly 220 alerts, ~45% of the repo total, for packages this
+project doesn't even depend on -- Django, Flask, etc. -- since they were never wired into
+any automated test, just a manual CLI demo). To run the demo scenarios below, recreate
+`requirements.txt` locally (not committed) from the "Known Vulnerabilities" table further
+down this file, run your scan, then delete it again.
 
 ## Test Scenarios
 
@@ -66,10 +74,10 @@ python tools/sbom-agent/src/cli.py analyze . --scan-vulnerabilities --compare-wi
 
 ```
 python-vulnerable/
-├── README.md                 # This documentation
-├── requirements.txt          # Vulnerable package versions
-├── requirements_fixed.txt    # Secure package versions
-└── test_app.py              # Simple Python app for testing
+├── README.md                 # This documentation (includes the version table)
+├── test_app.py               # Simple Python app for testing
+├── requirements.txt          # NOT committed -- recreate locally from the table above
+└── requirements_fixed.txt    # NOT committed -- recreate locally from the table above
 ```
 
 ## Usage in CI/CD

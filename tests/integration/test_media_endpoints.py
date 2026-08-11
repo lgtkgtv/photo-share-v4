@@ -298,8 +298,8 @@ class TestMediaUploadEndpoints:
         """Test media upload without authentication."""
         # The default get_current_user override set at module level always returns a
         # user regardless of headers, so exercise the *real* dependency for this one
-        # case (FastAPI's HTTPBearer with auto_error=True raises 403 "Not authenticated"
-        # for a missing Authorization header, not 401).
+        # case (FastAPI's HTTPBearer with auto_error=True raises 401 "Not authenticated"
+        # for a missing Authorization header).
         with real_dependency(main_module.get_current_user):
             response = client.post(
                 "/api/media/upload",
@@ -307,7 +307,7 @@ class TestMediaUploadEndpoints:
                 data={"title": "Test"}
             )
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     def test_upload_invalid_file_type(self, client):
         """Test upload with invalid file type."""
