@@ -2,10 +2,19 @@
 """
 Unit tests for authentication database models and operations.
 """
+import sys
+from pathlib import Path
 import pytest
 import asyncio
 from datetime import datetime, timezone
 from unittest.mock import Mock, AsyncMock, patch
+
+# services/auth-service is a standalone deployable unit (its own Dockerfile,
+# flat internal imports like `from auth_database import ...`) rather than a
+# `services.auth_service` Python package -- it isn't even a legal package
+# name (hyphen). Import it the same way the container does: put the service
+# directory on sys.path and import the flat module name.
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "services" / "auth-service"))
 
 class MockAsyncContextManager:
     """Helper class for mocking async context managers."""
@@ -20,8 +29,8 @@ class MockAsyncContextManager:
 
 # Mock the database module before importing
 with patch.dict('os.environ', {'AUTH_DATABASE_URL': 'sqlite+aiosqlite:///:memory:'}):
-    from services.auth_service.auth_database import (
-        User, Session, SSOAccount, Role, Permission, UserRole, 
+    from auth_database import (
+        User, Session, SSOAccount, Role, Permission, UserRole,
         RolePermission, TwoFactorDevice, BackupCode, EmailVerification,
         AuditLog, AuthDatabaseManager
     )
@@ -202,8 +211,8 @@ class TestAuthDatabaseManager:
     @pytest.mark.asyncio
     async def test_initialize(self, db_manager):
         """Test database manager initialization."""
-        with patch('services.auth_service.auth_database.create_async_engine') as mock_engine:
-            with patch('services.auth_service.auth_database.async_sessionmaker') as mock_sessionmaker:
+        with patch('auth_database.create_async_engine') as mock_engine:
+            with patch('auth_database.async_sessionmaker') as mock_sessionmaker:
                 mock_engine.return_value = Mock()
                 mock_sessionmaker.return_value = Mock()
                 
@@ -217,16 +226,22 @@ class TestAuthDatabaseManager:
     async def test_health_check_success(self, db_manager):
         """Test successful health check."""
         mock_session = AsyncMock()
-        mock_session.execute = AsyncMock()
-        
+        # health_check() calls the *sync* Result.scalar() on the awaited execute()
+        # result -- AsyncMock() auto-creates async children, so scalar() must be
+        # pinned to a plain Mock or it returns an unawaited coroutine (falsy).
+        mock_result = Mock()
+        mock_result.scalar = Mock(return_value=1)
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
         # Create a proper async context manager mock
         def mock_session_factory():
             return MockAsyncContextManager(mock_session)
-        
+
+        db_manager.engine = Mock()  # health_check() short-circuits to unhealthy if engine is unset
         db_manager.session_factory = mock_session_factory
-        
+
         result = await db_manager.health_check()
-        
+
         assert result is True
     
     @pytest.mark.asyncio

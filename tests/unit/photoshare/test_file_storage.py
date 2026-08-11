@@ -1,286 +1,163 @@
 #!/usr/bin/env python3
 """
 Unit tests for file storage functionality.
+
+Rewritten to match the actual FileStorageService implementation
+(services/photoshare/file_storage.py). The class this file used to test
+(StorageManager, with save_file/get_file_info/cleanup_old_files/etc.) does
+not exist in the codebase -- the real service is FileStorageService, with
+a different, bytes-based API (store_file/retrieve_file/delete_file) plus
+HMAC-signed URL helpers used by the share-download flow.
 """
+import hashlib
+import hmac
+import time
+from urllib.parse import urlparse, parse_qs
+
 import pytest
-import os
-import tempfile
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
-from datetime import datetime
+from unittest.mock import patch, AsyncMock
 
-from services.photoshare.file_storage import (
-    StorageManager, FileMetadata, FileValidationResult, 
-    validate_image_file, generate_filename, get_file_hash
-)
+from services.photoshare.file_storage import FileStorageService
 
 
-class TestFileMetadata:
-    """Test File Metadata class."""
-    
-    def test_metadata_creation(self):
-        """Test file metadata creation."""
-        metadata = FileMetadata(
-            filename="test.jpg",
-            content_type="image/jpeg",
-            size=1024,
-            hash="abc123",
-            width=800,
-            height=600
+@pytest.fixture
+def storage_service(tmp_path, monkeypatch):
+    """Create a FileStorageService instance backed by a temp directory."""
+    monkeypatch.setenv("STORAGE_PATH", str(tmp_path))
+    monkeypatch.setenv("MAX_FILE_SIZE_MB", "1")
+    monkeypatch.setenv("STORAGE_SECRET_KEY", "test-secret-key")
+    return FileStorageService()
+
+
+class TestFileHashing:
+    """Test internal SHA-256 content hashing."""
+
+    def test_generate_file_hash_is_sha256(self, storage_service):
+        content = b"hello world"
+        assert storage_service._generate_file_hash(content) == hashlib.sha256(content).hexdigest()
+
+    def test_generate_file_hash_differs_for_different_content(self, storage_service):
+        assert storage_service._generate_file_hash(b"a") != storage_service._generate_file_hash(b"b")
+
+
+class TestStoragePath:
+    """Test storage path layout."""
+
+    def test_get_storage_path_format(self, storage_service):
+        assert storage_service._get_storage_path(42, "photo.jpg") == "users/42/photos/photo.jpg"
+
+
+class TestStoreRetrieveDelete:
+    """Test the store_file/retrieve_file/delete_file lifecycle."""
+
+    @pytest.mark.asyncio
+    async def test_store_file_writes_to_disk_and_returns_metadata(self, storage_service, tmp_path):
+        content = b"fake image bytes"
+        result = await storage_service.store_file(1, "test.jpg", content, "image/jpeg")
+
+        assert result["file_size"] == len(content)
+        assert result["content_type"] == "image/jpeg"
+        assert result["platform_stored"] is True
+        assert result["storage_path"] == "users/1/photos/test.jpg"
+        assert result["file_hash"] == hashlib.sha256(content).hexdigest()
+
+        stored_file = tmp_path / "users" / "1" / "photos" / "test.jpg"
+        assert stored_file.read_bytes() == content
+
+    @pytest.mark.asyncio
+    async def test_store_file_rejects_oversized_content(self, storage_service):
+        too_big = b"x" * (2 * 1024 * 1024)  # exceeds the 1MB limit set in the fixture
+        with pytest.raises(ValueError):
+            await storage_service.store_file(1, "big.jpg", too_big, "image/jpeg")
+
+    @pytest.mark.asyncio
+    async def test_retrieve_file_returns_stored_content(self, storage_service):
+        content = b"round trip bytes"
+        stored = await storage_service.store_file(2, "roundtrip.jpg", content, "image/jpeg")
+
+        assert await storage_service.retrieve_file(stored["storage_path"]) == content
+
+    @pytest.mark.asyncio
+    async def test_retrieve_file_missing_locally_falls_back_to_platform(self, storage_service):
+        with patch.object(storage_service, "_download_from_platform_storage", AsyncMock(return_value=None)) as mock_dl:
+            result = await storage_service.retrieve_file("users/9/photos/nope.jpg")
+
+        assert result is None
+        mock_dl.assert_awaited_once_with("users/9/photos/nope.jpg")
+
+    @pytest.mark.asyncio
+    async def test_delete_file_removes_local_file(self, storage_service, tmp_path):
+        content = b"to be deleted"
+        stored = await storage_service.store_file(3, "delete_me.jpg", content, "image/jpeg")
+        stored_file = tmp_path / "users" / "3" / "photos" / "delete_me.jpg"
+        assert stored_file.exists()
+
+        assert await storage_service.delete_file(stored["storage_path"]) is True
+        assert not stored_file.exists()
+
+
+class TestSignedUrls:
+    """Test the storage_path-scoped signed URL helpers."""
+
+    def test_generate_and_verify_signed_url_round_trip(self, storage_service):
+        url = storage_service.generate_signed_url("users/1/photos/a.jpg", expires_in=60)
+        assert url.startswith("/api/photos/secure/users/1/photos/a.jpg?")
+
+        query = parse_qs(urlparse(url).query)
+        assert storage_service.verify_signed_url(
+            "users/1/photos/a.jpg", query["expires"][0], query["signature"][0]
+        ) is True
+
+    def test_verify_signed_url_rejects_expired(self, storage_service):
+        expired_ts = int(time.time()) - 10
+        payload = f"users/1/photos/a.jpg:{expired_ts}"
+        signature = hmac.new(storage_service.storage_secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+
+        assert storage_service.verify_signed_url("users/1/photos/a.jpg", str(expired_ts), signature) is False
+
+    def test_verify_signed_url_rejects_tampered_signature(self, storage_service):
+        url = storage_service.generate_signed_url("users/1/photos/a.jpg", expires_in=60)
+        expires = parse_qs(urlparse(url).query)["expires"][0]
+
+        assert storage_service.verify_signed_url("users/1/photos/a.jpg", expires, "tampered") is False
+
+
+class TestPayloadSigning:
+    """Test the generic HMAC payload signer used by the share-download flow."""
+
+    def test_sign_and_verify_payload_round_trip(self, storage_service):
+        signed = storage_service.sign_payload("share-token-abc", expires_in=3600)
+        result = storage_service.verify_signed_payload(
+            "share-token-abc", str(signed["expires_at"]), signed["signature"]
         )
-        
-        assert metadata.filename == "test.jpg"
-        assert metadata.content_type == "image/jpeg"
-        assert metadata.size == 1024
-        assert metadata.hash == "abc123"
-        assert metadata.width == 800
-        assert metadata.height == 600
-    
-    def test_metadata_to_dict(self):
-        """Test metadata serialization."""
-        metadata = FileMetadata(
-            filename="test.jpg",
-            content_type="image/jpeg",
-            size=1024
+        assert result == {"valid": True, "reason": "ok"}
+
+    def test_verify_signed_payload_expired(self, storage_service):
+        signed = storage_service.sign_payload("share-token-abc", expires_in=-10)
+        result = storage_service.verify_signed_payload(
+            "share-token-abc", str(signed["expires_at"]), signed["signature"]
         )
-        
-        metadata_dict = metadata.to_dict()
-        
-        assert metadata_dict["filename"] == "test.jpg"
-        assert metadata_dict["content_type"] == "image/jpeg"
-        assert metadata_dict["size"] == 1024
+        assert result == {"valid": False, "reason": "expired"}
 
-
-class TestFileValidationResult:
-    """Test File Validation Result class."""
-    
-    def test_validation_result_valid(self):
-        """Test valid file validation result."""
-        result = FileValidationResult(
-            is_valid=True,
-            content_type="image/jpeg",
-            file_size=1024
+    def test_verify_signed_payload_invalid_signature(self, storage_service):
+        signed = storage_service.sign_payload("share-token-abc", expires_in=3600)
+        result = storage_service.verify_signed_payload(
+            "share-token-abc", str(signed["expires_at"]), "bad-signature"
         )
-        
-        assert result.is_valid is True
-        assert result.content_type == "image/jpeg"
-        assert result.file_size == 1024
-        assert result.errors == []
-    
-    def test_validation_result_invalid(self):
-        """Test invalid file validation result."""
-        result = FileValidationResult(
-            is_valid=False,
-            errors=["File too large", "Invalid format"]
-        )
-        
-        assert result.is_valid is False
-        assert len(result.errors) == 2
-        assert "File too large" in result.errors
+        assert result == {"valid": False, "reason": "invalid_signature"}
+
+    def test_verify_signed_payload_malformed_expires(self, storage_service):
+        result = storage_service.verify_signed_payload("share-token-abc", "not-a-number", "whatever")
+        assert result == {"valid": False, "reason": "malformed"}
 
 
-class TestFileValidation:
-    """Test file validation functions."""
-    
-    def test_validate_image_file_valid_jpeg(self):
-        """Test valid JPEG validation."""
-        with tempfile.NamedTemporaryFile(suffix='.jpg') as tmp_file:
-            # Create minimal JPEG header
-            tmp_file.write(b'\xff\xd8\xff\xe0\x00\x10JFIF')
-            tmp_file.flush()
-            
-            result = validate_image_file(tmp_file.name, "image/jpeg", 1024)
-            
-            assert result.is_valid is True
-            assert result.content_type == "image/jpeg"
-    
-    def test_validate_image_file_invalid_size(self):
-        """Test file size validation."""
-        with tempfile.NamedTemporaryFile(suffix='.jpg') as tmp_file:
-            tmp_file.write(b'x' * (10 * 1024 * 1024 + 1))  # > 10MB
-            tmp_file.flush()
-            
-            result = validate_image_file(tmp_file.name, "image/jpeg", tmp_file.tell())
-            
-            assert result.is_valid is False
-            assert "File size exceeds limit" in result.errors[0]
-    
-    def test_validate_image_file_invalid_extension(self):
-        """Test file extension validation."""
-        with tempfile.NamedTemporaryFile(suffix='.exe') as tmp_file:
-            tmp_file.write(b'test data')
-            tmp_file.flush()
-            
-            result = validate_image_file(tmp_file.name, "application/exe", 100)
-            
-            assert result.is_valid is False
-            assert any("not allowed" in error for error in result.errors)
+class TestHealthCheck:
+    """Test the storage health check."""
 
+    @pytest.mark.asyncio
+    async def test_health_check_reports_local_storage_writable(self, storage_service):
+        with patch("services.photoshare.file_storage.aiohttp.ClientSession", side_effect=Exception("no network")):
+            result = await storage_service.health_check()
 
-class TestUtilityFunctions:
-    """Test utility functions."""
-    
-    def test_generate_filename(self):
-        """Test filename generation."""
-        filename = generate_filename("test.jpg", "user123")
-        
-        assert filename.endswith("_test.jpg")
-        assert len(filename.split('_')[0]) == 8  # UUID prefix length
-    
-    def test_generate_filename_sanitization(self):
-        """Test filename sanitization."""
-        filename = generate_filename("test file with spaces.jpg", "user123")
-        
-        assert " " not in filename
-        assert filename.endswith("_test_file_with_spaces.jpg")
-    
-    def test_get_file_hash(self):
-        """Test file hash generation."""
-        with tempfile.NamedTemporaryFile() as tmp_file:
-            tmp_file.write(b"test content")
-            tmp_file.flush()
-            
-            file_hash = get_file_hash(tmp_file.name)
-            
-            assert isinstance(file_hash, str)
-            assert len(file_hash) == 64  # SHA256 hex length
-
-
-class TestStorageManager:
-    """Test Storage Manager functionality."""
-    
-    @pytest.fixture
-    def storage_manager(self):
-        """Create storage manager instance."""
-        with patch.dict('os.environ', {
-            'STORAGE_PATH': '/tmp/test_storage',
-            'MAX_FILE_SIZE': '10485760'  # 10MB
-        }):
-            return StorageManager()
-    
-    def test_storage_manager_initialization(self, storage_manager):
-        """Test storage manager initialization."""
-        assert storage_manager.storage_path == '/tmp/test_storage'
-        assert storage_manager.max_file_size == 10485760
-        assert storage_manager.allowed_extensions == {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'}
-    
-    @pytest.mark.asyncio
-    async def test_save_file_success(self, storage_manager):
-        """Test successful file save."""
-        mock_file = Mock()
-        mock_file.filename = "test.jpg"
-        mock_file.content_type = "image/jpeg"
-        mock_file.size = 1024
-        mock_file.read = AsyncMock(return_value=b"test image data")
-        
-        with patch('os.makedirs'):
-            with patch('aiofiles.open', create=True) as mock_open:
-                mock_file_handle = AsyncMock()
-                mock_file_handle.write = AsyncMock()
-                mock_open.return_value.__aenter__ = AsyncMock(return_value=mock_file_handle)
-                mock_open.return_value.__aexit__ = AsyncMock(return_value=None)
-                
-                with patch('services.photoshare.file_storage.validate_image_file') as mock_validate:
-                    mock_validate.return_value = FileValidationResult(
-                        is_valid=True,
-                        content_type="image/jpeg",
-                        file_size=1024
-                    )
-                    
-                    with patch('services.photoshare.file_storage.get_file_hash', return_value='abc123'):
-                        result = await storage_manager.save_file(mock_file, "user123")
-                        
-                        assert result["success"] is True
-                        assert "filename" in result
-                        assert "file_path" in result
-                        assert "metadata" in result
-    
-    @pytest.mark.asyncio
-    async def test_save_file_validation_failure(self, storage_manager):
-        """Test file save with validation failure."""
-        mock_file = Mock()
-        mock_file.filename = "test.exe"
-        mock_file.content_type = "application/exe"
-        mock_file.size = 1024
-        
-        with patch('services.photoshare.file_storage.validate_image_file') as mock_validate:
-            mock_validate.return_value = FileValidationResult(
-                is_valid=False,
-                errors=["Invalid file type"]
-            )
-            
-            result = await storage_manager.save_file(mock_file, "user123")
-            
-            assert result["success"] is False
-            assert "Invalid file type" in result["error"]
-    
-    @pytest.mark.asyncio
-    async def test_delete_file_success(self, storage_manager):
-        """Test successful file deletion."""
-        with patch('os.path.exists', return_value=True):
-            with patch('os.remove') as mock_remove:
-                result = await storage_manager.delete_file("/tmp/test_storage/test.jpg")
-                
-                assert result is True
-                mock_remove.assert_called_once_with("/tmp/test_storage/test.jpg")
-    
-    @pytest.mark.asyncio
-    async def test_delete_file_not_exists(self, storage_manager):
-        """Test file deletion when file doesn't exist."""
-        with patch('os.path.exists', return_value=False):
-            result = await storage_manager.delete_file("/tmp/test_storage/nonexistent.jpg")
-            
-            assert result is False
-    
-    @pytest.mark.asyncio
-    async def test_get_file_info_success(self, storage_manager):
-        """Test getting file information."""
-        with patch('os.path.exists', return_value=True):
-            with patch('os.path.getsize', return_value=1024):
-                with patch('os.path.getctime', return_value=1234567890):
-                    info = await storage_manager.get_file_info("/tmp/test_storage/test.jpg")
-                    
-                    assert info["exists"] is True
-                    assert info["size"] == 1024
-                    assert info["created"] == datetime.fromtimestamp(1234567890)
-    
-    @pytest.mark.asyncio
-    async def test_get_file_info_not_exists(self, storage_manager):
-        """Test getting file information for non-existent file."""
-        with patch('os.path.exists', return_value=False):
-            info = await storage_manager.get_file_info("/tmp/test_storage/nonexistent.jpg")
-            
-            assert info["exists"] is False
-            assert info["size"] is None
-    
-    @pytest.mark.asyncio
-    async def test_cleanup_old_files(self, storage_manager):
-        """Test cleanup of old files."""
-        with patch('os.walk') as mock_walk:
-            mock_walk.return_value = [
-                ('/tmp/test_storage', [], ['old_file.jpg', 'new_file.jpg'])
-            ]
-            
-            with patch('os.path.getmtime') as mock_getmtime:
-                with patch('os.remove') as mock_remove:
-                    # Mock old file (30+ days old)
-                    mock_getmtime.side_effect = lambda f: 1234567890 if 'old' in f else 1734567890
-                    
-                    cleaned = await storage_manager.cleanup_old_files(days=30)
-                    
-                    assert cleaned == 1
-                    mock_remove.assert_called_once()
-    
-    @pytest.mark.asyncio
-    async def test_get_storage_stats(self, storage_manager):
-        """Test getting storage statistics."""
-        with patch('os.walk') as mock_walk:
-            mock_walk.return_value = [
-                ('/tmp/test_storage', [], ['file1.jpg', 'file2.png'])
-            ]
-            
-            with patch('os.path.getsize', return_value=1024):
-                stats = await storage_manager.get_storage_stats()
-                
-                assert stats["total_files"] == 2
-                assert stats["total_size"] == 2048
-                assert "storage_path" in stats
+        assert result["local_storage"] is True
+        assert result["platform_storage"] is False

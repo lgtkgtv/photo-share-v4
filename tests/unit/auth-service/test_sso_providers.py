@@ -2,12 +2,19 @@
 """
 Unit tests for SSO provider integration.
 """
+import sys
+from pathlib import Path
 import pytest
 import asyncio
 from unittest.mock import Mock, AsyncMock, patch
 import httpx
 
-from services.auth_service.sso_providers import (
+# services/auth-service is a standalone deployable unit (own Dockerfile,
+# flat internal imports), not a `services.auth_service` Python package --
+# import it the way the container does, via sys.path + flat module name.
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "services" / "auth-service"))
+
+from sso_providers import (
     SSOProvider, SSOUserProfile, SSOConfig, SSOProviderManager
 )
 

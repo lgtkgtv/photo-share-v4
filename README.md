@@ -1,52 +1,30 @@
-# PhotoShare - Production-Ready Photo Sharing Platform
+# PhotoShare - Photo Sharing Platform (Active Development)
 
 **Version**: 2.4.0-separated-auth  
-**Status**: ✅ Production Ready - Zero Known Vulnerabilities  
-**Last Updated**: August 24, 2025
+**Status**: Active development, not production-hardened — see [Current State](#-current-state) below  
+**Last Updated**: August 10, 2026
 
 ---
 
 ## 🎯 Quick Start
 
-PhotoShare is a **production-ready photo sharing platform** built with separated microservices architecture, featuring enterprise-grade security, scalability, and comprehensive documentation.
+PhotoShare is a photo/video sharing platform built with a separated auth-service + app-service microservices architecture. The auth/security scaffolding (SSO, 2FA, RBAC, audit logging, WAF) is extensive, and the core photo/video/album/share product features work and are covered by tests, but this has not been through an independent security review and several real bugs in the core upload/streaming path were only found and fixed in-repo testing (see below) — "zero known vulnerabilities" is not a claim this codebase can currently support.
 
-### optional - cleanup all docker to start from a known good state
-
-```bash
-docker rm -f $(docker ps -aq)
-docker rmi -f $(docker images -aq)
-docker volume rm $(docker volume ls -q)
-docker network rm $(docker network ls -q)
-docker system prune -a --volumes -f
-```
-
-### ⚡ 5-Minute Setup
+### ⚡ One-Command Setup
 
 ```bash
-# 1. Clone and navigate
 git clone <your-repo-url> photoshare
 cd photoshare
-
-# 2. Set up Python environment (REQUIRED)
-./scripts/dev-setup.sh
-source .venv/bin/activate
-
-# 3. Start the system
-docker compose -f docker-compose.separated.yml up --build -d
-
-# 4. Verify health (wait 2-3 minutes for startup)
-curl -s http://localhost:8001/health | jq '.'  # Auth Service
-curl -s http://localhost:8000/health | jq '.'  # App Service
-
-# 5. Test the system
-curl -X POST http://localhost:8001/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email": "test@example.com", "password": "TestPass123!", "first_name": "Test", "last_name": "User"}'
+./scripts/quickstart.sh
 ```
 
-**🚨 CRITICAL**: Always use `uv` for Python package management. Never use `pip`!
+That's it — no manual env file setup, no separate steps. `quickstart.sh` generates `.env.auth-service` and `.env.application` with fresh random secrets (a shared `JWT_SECRET_KEY` between the two services, matching database credentials — see `scripts/generate-env-files.sh` if you want to know exactly what it does), builds and starts the full `docker-compose.separated.yml` stack, and polls both services' `/health` endpoints until they're actually up (a few minutes on first run while images build). It prints a ready-to-run `curl` command to register a test user when it's done.
 
-**✅ If you see `{"status": "healthy"}` from both services, you're ready to go!**
+This has been verified by tearing the stack down completely (`docker compose down -v`, removing the built images, deleting the generated env files) and re-running `./scripts/quickstart.sh` from that clean state.
+
+To tear down: `docker compose -f docker-compose.separated.yml down` (add `-v` to also drop the database volumes).
+
+**🚨 CRITICAL**: For local Python work outside Docker (running tests, etc.), use `uv` — see `./scripts/dev-setup.sh`. Never use `pip` directly in this repo.
 
 ---
 
@@ -73,18 +51,30 @@ curl -X POST http://localhost:8001/api/auth/register \
 ```
 
 ### Key Features
-- 🔐 **Enterprise Security**: SSO, 2FA, RBAC, JWT authentication
-- 📷 **Photo Management**: Upload, organize, share with advanced metadata
-- 🛡️ **Defense-in-Depth**: Multi-layer security with real-time monitoring
-- 🚀 **Production Ready**: Auto-scaling, monitoring, backup systems
+- 🔐 **Auth Scaffolding**: SSO, 2FA, RBAC, JWT authentication (extensive, not independently audited)
+- 📷 **Photo & Video Management**: Upload, organize, share, tag, comment, view analytics
+- 🛡️ **Defense-in-Depth Scaffolding**: WAF, audit logging, threat-detection middleware present
 - 📱 **API-First**: RESTful APIs for web, mobile, and integration
-- 🔧 **DevOps Ready**: Docker, health checks, comprehensive testing
+- 🔧 **Dockerized**: Runs via `docker compose`, health checks included
 
 ---
 
-## 📚 Complete Documentation Suite (1000+ pages)
+## 📌 Current State
 
-PhotoShare includes **the most comprehensive documentation of any open-source photo sharing platform**. All content is current, tested, and production-ready.
+Honest status as of this writing, not the aspirational one further down this document:
+
+- **Real, tested product features**: photo/video upload, albums, comments, tags, view/download analytics, and time-limited signed share-download links (66 end-to-end checks across `services/photoshare/tests/test_albums_e2e.py`, `test_shares_comments_tags_analytics_e2e.py`, and `test_share_download_e2e.py`). Before those features were added, roughly 48 of the app service's 58 routes were security/observability plumbing (WAF status, audit trail, threat detection, secret rotation, etc.) and only ~10 were actual photo features — that ratio has since improved with the product API, but the plumbing still dominates the route count.
+- **Core upload/streaming path had real bugs, now fixed and tested**: `/api/media/upload` (photo and video), streaming, and thumbnail generation previously failed on first real invocation — an undefined `VIDEO_PROCESSOR_AVAILABLE` name, a wrong `FileStorageService.store_file()` call signature, a nonexistent `current_user.user_uuid` attribute, an undefined `ThreatType.UPLOAD_SECURITY` enum member, a WAF file-extension allowlist that rejected every video format, an undefined `UPLOAD_DIR`, and permission checks comparing a `current_user.user_id`/`media_record.user_id` attribute that doesn't exist on either class. These were only caught because a previously-uncollectible integration test file (`tests/integration/test_media_endpoints.py`) was repaired and actually run. The `current_user.user_id` pattern appears in roughly 40 other places across `main.py` (mostly admin/security endpoints) that are outside current test coverage — a compatibility alias was added so those calls no longer raise, but their behavior beyond "doesn't crash" is unverified.
+- **Automated (pytest/CI) tests run against SQLite, not Postgres.** The full product journey (register → login → upload a photo → create an album → add photo to album → create a share link → resolve it → download via the signed URL → comment → tag → check analytics) has been manually verified end-to-end against the real `docker-compose.separated.yml` Postgres stack — see `./scripts/demo-user-journey.sh` — but this is a manual script run, not part of the automated CI gate (the `docker-compose-smoke-test` CI job only covers register/login/cross-service JWT).
+- **That verification found and fixed a real gap**: the RBAC seed data (`services/auth-service/setup_rbac.py`, auto-run on auth-service startup) had zero `albums:*` permissions for any role, including admin — every real registered user was locked out of creating an album (403), a check that only exists in the live-Postgres RBAC path and is invisible to the SQLite e2e tests (which fabricate a user object with hardcoded permissions rather than reading real seeded roles). Fixed by adding `albums:write`/`albums:read` to the seed data; shares/comments/tags/analytics use ownership checks rather than RBAC permission strings, so they weren't affected by this particular gap.
+- **"Zero known vulnerabilities" is not a supportable claim.** No independent security audit has been performed. The claim in older docs reflected the absence of a formal pentest finding, not a verified absence of bugs — and this session found multiple functional bugs in security-adjacent code (audit logging, permission checks) on first real execution.
+- **Security/admin subsystem (SSO, 2FA, RBAC, threat detection, secret rotation, etc.) is extensive but largely unit-tested only**, not exercised end-to-end against live services in this test suite.
+
+---
+
+## 📚 Documentation Suite
+
+This repo has a large amount of documentation (USER_GUIDE.md, THREAT_MODEL.md, WEBAPP_ADMIN_SECURITY_GUIDE.md, SECURITY_STATUS.md, etc.). Treat claims in those documents about "production-ready," "zero known vulnerabilities," or compliance readiness with the same skepticism as the claims that used to be in this file — they have not been re-audited against the current codebase.
 
 ---
 
@@ -112,9 +102,9 @@ Get running in 5 minutes, understand the architecture, and find exactly what you
 ---
 
 ### 🛡️ **SECURITY ARCHITECTURE** → [THREAT_MODEL.md](./THREAT_MODEL.md)
-**200+ pages | Enterprise-grade security analysis and implementation**
+**A design-time STRIDE threat model — not an audit result; see [Current State](#-current-state)**
 
-**Complete security threat analysis and mitigations:**
+**Threat analysis and intended mitigations:**
 - 🎯 **STRIDE Analysis**: Systematic identification of all threats
 - 🔒 **Asset Protection**: Critical, high, and medium value asset security
 - 📊 **Risk Assessment**: Threat heat maps showing mitigation effectiveness  
@@ -144,16 +134,14 @@ Get running in 5 minutes, understand the architecture, and find exactly what you
 ---
 
 ### 🛡️ **SECURITY STATUS** → [SECURITY_STATUS.md](./SECURITY_STATUS.md)
-**Current security implementation status and health monitoring**
+**Security implementation inventory — not an audit result. See [Current State](#-current-state) above.**
 
-**Real-time security status overview:**
-- ✅ **Zero Known Vulnerabilities**: Complete security implementation verified
-- ✅ **40+ Security Controls**: All security measures active and monitored  
-- ✅ **Enterprise-Grade**: Production-ready security suitable for enterprise use
-- ✅ **Continuously Monitored**: Real-time threat detection and automated response
-- ✅ **Compliance Ready**: GDPR, SOC 2, regulatory requirements implemented
+- 🔧 **Extensive security scaffolding present**: WAF, audit logging, RBAC, 2FA, secret rotation, threat-detection middleware
+- ⚠️ **Not independently audited**: no external pentest or security review has been performed
+- ⚠️ **Coverage is mostly unit-level**: security modules are unit-tested; end-to-end behavior against live services is largely unverified
+- ⚠️ **Compliance claims (GDPR, SOC 2) are unverified**: nothing in this repo constitutes a compliance certification
 
-**📍 Use this for**: Security status verification, compliance reporting, security metrics
+**📍 Use this for**: an inventory of what security mechanisms exist, not a guarantee of their correctness
 
 ---
 
@@ -188,12 +176,12 @@ Get running in 5 minutes, understand the architecture, and find exactly what you
 
 PhotoShare maintains a clean, organized documentation structure with **6 core documents** and archived historical materials:
 
-### ✨ **Active Core Documents** (Production-Ready):
+### ✨ **Active Core Documents**:
 - **[README.md](./README.md)** - This document: Quick start and navigation
-- **[USER_GUIDE.md](./USER_GUIDE.md)** - Complete development and deployment guide (460+ pages)
-- **[THREAT_MODEL.md](./THREAT_MODEL.md)** - Security architecture and threat analysis (200+ pages) 
-- **[WEBAPP_ADMIN_SECURITY_GUIDE.md](./WEBAPP_ADMIN_SECURITY_GUIDE.md)** - Security operations and incident response (300+ pages)
-- **[SECURITY_STATUS.md](./SECURITY_STATUS.md)** - Current security implementation status (zero vulnerabilities)
+- **[USER_GUIDE.md](./USER_GUIDE.md)** - Development and deployment guide
+- **[THREAT_MODEL.md](./THREAT_MODEL.md)** - Security architecture and threat analysis (design-time analysis, not an audit result)
+- **[WEBAPP_ADMIN_SECURITY_GUIDE.md](./WEBAPP_ADMIN_SECURITY_GUIDE.md)** - Security operations and incident response
+- **[SECURITY_STATUS.md](./SECURITY_STATUS.md)** - Security implementation inventory (not independently audited — see [Current State](#-current-state))
 - **[FUTURE_ENHANCEMENT_ROADMAP.md](./FUTURE_ENHANCEMENT_ROADMAP.md)** - Strategic 4-phase enhancement plan
 
 ### 🔗 **Redirect Documents** (Consolidated Content):
@@ -235,14 +223,11 @@ PhotoShare maintains a clean, organized documentation structure with **6 core do
 
 ---
 
-## 📊 **Documentation Quality Metrics**
+## 📊 **Documentation Notes**
 
-- ✅ **Comprehensive**: 1000+ pages covering all aspects
-- ✅ **Current**: All content reflects latest 2.4.0-separated-auth architecture  
-- ✅ **Tested**: All procedures and examples verified working
-- ✅ **Accessible**: Clear navigation and multiple entry points
-- ✅ **Production-Ready**: All content suitable for enterprise use
-- ✅ **Consolidated**: No duplication, single source of truth for each topic
+- 📚 **Large volume**: extensive documentation across README/USER_GUIDE/THREAT_MODEL/security guides
+- ⚠️ **Not all current**: much of it predates the Phase 1 product API and the bug fixes described in [Current State](#-current-state); treat specific claims skeptically and verify against code
+- 🧭 **Accessible**: clear navigation and multiple entry points
 
 ---
 
@@ -348,28 +333,29 @@ GET /api/platform/security
 
 ## 🧪 Testing & Validation
 
-### Comprehensive Test Suite
-- **Unit Tests**: Individual component testing
-- **Integration Tests**: Service-to-service communication
-- **Security Tests**: Security compliance validation
-- **Performance Tests**: Load testing and benchmarking
+### Test Suite
+- **Unit tests** (`tests/unit/`, 208 tests): run against SQLite in-process, no live services needed
+- **Phase 1 product API e2e tests** (`services/photoshare/tests/`): albums, shares/comments/tags/analytics, and signed share-download — 66 checks, SQLite-backed, run as plain scripts (`python <file>.py`), not via pytest
+- **Two self-contained integration/security files**: `tests/integration/test_media_endpoints.py` (19 tests, upload/streaming/thumbnail/metadata against a mocked FastAPI dependency graph) and `tests/security/test_waf_protection.py` (12 tests) — both SQLite/mock-backed, no live services
+- **Everything else under `tests/integration/` and `tests/security/`**: requires live auth-service + app-service instances running on localhost, or exercises code paths not covered by current fixtures — expect these to fail or need live services rather than treating a failure as something broken
+- **CI** (`.github/workflows/ci.yml`) runs all of the above self-contained suites on every push/PR, plus a separate job that boots the real `docker-compose.separated.yml` stack (real Postgres) and smoke-tests register → login → cross-service JWT validation
+- **Full user-journey demo against real Postgres** (`./scripts/demo-user-journey.sh`): register → login → upload a photo → create an album → add photo to album → create a share link → resolve it → download via the signed URL → comment → tag → check analytics. Run `./scripts/quickstart.sh` first, then this script. Manually verified, not (yet) part of the CI gate.
 
 ### Quick Test Commands
 ```bash
 # REQUIRED: Activate Python environment first
 source .venv/bin/activate
 
-# Test authentication flow
-bash api-integration-tests/test-auth-flow.sh
+# What CI runs (all self-contained, no live services needed)
+uv run pytest tests/unit/ -v
+uv run pytest tests/integration/test_media_endpoints.py tests/security/test_waf_protection.py -v
+uv run python services/photoshare/tests/test_albums_e2e.py
+uv run python services/photoshare/tests/test_shares_comments_tags_analytics_e2e.py
+uv run python services/photoshare/tests/test_share_download_e2e.py
 
-# Test photo upload workflow  
-bash api-integration-tests/test-photo-upload.sh
-
-# Run security compliance tests
-uv run python operational-security-validation/test-security-improvements.py
-
-# Run full test suite
-uv run pytest
+# Everything else in tests/integration/ and tests/security/ needs live services --
+# start them first (./scripts/quickstart.sh), then:
+uv run pytest tests/integration/ tests/security/ -v
 ```
 
 ---
@@ -487,31 +473,22 @@ docker compose -f docker-compose.separated.yml restart auth-db app-db
 - 📚 **API Integration**: Check [USER_GUIDE.md - API Reference](./USER_GUIDE.md#-api-reference)
 
 ### System Status
-- ✅ **Production Ready**: Zero known security vulnerabilities
-- ✅ **Fully Tested**: Comprehensive test suite passing
-- ✅ **Complete Documentation**: 1000+ pages of documentation
-- ✅ **Security Audited**: STRIDE analysis and threat modeling complete
-- ✅ **Performance Optimized**: Caching, monitoring, and auto-scaling ready
+- ✅ **Core product features working and tested**: photo/video upload, albums, sharing, comments, tags, analytics
+- ⚠️ **Not production-hardened**: no independent security audit; see [Current State](#-current-state)
+- ⚠️ **STRIDE analysis in THREAT_MODEL.md is a design-time exercise**, not a verification that the implementation matches the model
+- 🔧 **Monitoring/caching scaffolding present** (Prometheus metrics, middleware) — not validated under load
 
 ---
 
 ## 🏆 Project Status
 
-**PhotoShare is production-ready** with:
+PhotoShare is under active development. What's real:
 
-- 🔐 **Enterprise-Grade Security**: Complete security implementation
-- 📚 **Comprehensive Documentation**: 1000+ pages covering all aspects
-- 🧪 **Full Test Coverage**: Unit, integration, security, and performance tests  
-- 🚀 **Zero-Downtime Deployment**: Production deployment procedures
-- 📊 **Complete Monitoring**: Health checks, metrics, and alerting
-- 🛡️ **Security Compliance**: GDPR, SOC 2, and regulatory compliance ready
+- 🔐 **Auth scaffolding**: SSO, 2FA, RBAC, JWT — extensive, not independently audited
+- 📷 **Core product features**: upload, albums, sharing, comments, tags, analytics — tested, working
+- 🧪 **Test coverage**: solid at the unit and Phase-1-product-API level; integration/security tests need live services and mostly aren't run in CI (see [Current State](#-current-state))
+- 🚀 **Deployment**: `docker compose` based; a genuinely one-command fresh-clone setup and CI running the full suite are tracked as open work, not yet done
 
 ---
 
-**🚀 Ready to get started? Follow the [5-minute setup](#-5-minute-setup) above or dive into the [complete user guide](./USER_GUIDE.md)!**
-
----
-
-**📞 Questions?** Check our comprehensive documentation suite above - we've got you covered from setup to production deployment! 
-
-**🔒 Security First** - Every component designed with security as the foundation, not an afterthought.
+**🚀 Ready to get started?** Follow the [5-minute setup](#-5-minute-setup) above, and read [Current State](#-current-state) first so you know what's actually been verified.

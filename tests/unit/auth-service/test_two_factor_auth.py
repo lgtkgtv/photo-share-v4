@@ -2,12 +2,19 @@
 """
 Unit tests for two-factor authentication.
 """
+import sys
+from pathlib import Path
 import pytest
 import asyncio
 from unittest.mock import Mock, AsyncMock, patch
 from datetime import datetime, timezone
 
-from services.auth_service.two_factor_auth import (
+# services/auth-service is a standalone deployable unit (own Dockerfile,
+# flat internal imports), not a `services.auth_service` Python package --
+# import it the way the container does, via sys.path + flat module name.
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "services" / "auth-service"))
+
+from two_factor_auth import (
     TwoFactorMethod, TwoFactorDevice, BackupCode, TwoFactorAuthManager
 )
 
@@ -106,7 +113,7 @@ class TestTwoFactorAuthManager:
                     mock_qr.make_image.return_value = mock_qr_image
                     mock_qr_class.return_value = mock_qr
                     
-                    with patch('services.auth_service.two_factor_auth.BytesIO'):
+                    with patch('two_factor_auth.BytesIO'):
                         with patch('base64.b64encode', return_value=b'test_qr_code'):
                             result = await manager.setup_totp("user123", "test@example.com", "Test App")
                             

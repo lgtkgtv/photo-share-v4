@@ -17,14 +17,21 @@ async def setup_default_permissions():
     default_permissions = [
         # Photo permissions
         ("photos:create", "photos", "create", "Upload and create photos"),
-        ("photos:read", "photos", "read", "View own photos"),  
+        ("photos:read", "photos", "read", "View own photos"),
         ("photos:read_all", "photos", "read_all", "View all photos (admin)"),
         ("photos:update", "photos", "update", "Edit own photos"),
         ("photos:update_all", "photos", "update_all", "Edit any photos (admin)"),
         ("photos:delete", "photos", "delete", "Delete own photos"),
         ("photos:delete_all", "photos", "delete_all", "Delete any photos (admin)"),
         ("photos:manage", "photos", "manage", "Full photo management"),
-        
+
+        # Album permissions (routers/albums.py) -- added when the Phase 1 product
+        # API shipped; without these, no real user (not even admin) can create an
+        # album, since AuthenticatedUser.has_permission("albums", "write") checks
+        # this exact permission string against the roles seeded here.
+        ("albums:write", "albums", "write", "Create and manage own albums"),
+        ("albums:read", "albums", "read", "View albums"),
+
         # User permissions
         ("users:read", "users", "read", "View user profiles"),
         ("users:update", "users", "update", "Update own profile"),
@@ -111,19 +118,22 @@ async def assign_role_permissions():
     role_permissions_map = {
         "user": [
             "photos:create", "photos:read", "photos:update", "photos:delete",
+            "albums:write", "albums:read",
             "users:read", "users:update", "users:delete",
             "system:health"
         ],
         "premium": [
             # All user permissions plus enhanced features
             "photos:create", "photos:read", "photos:update", "photos:delete",
+            "albums:write", "albums:read",
             "users:read", "users:update", "users:delete",
             "system:health", "system:metrics"
         ],
         "moderator": [
             # All premium permissions plus content moderation
             "photos:create", "photos:read", "photos:update", "photos:delete",
-            "photos:read_all", "photos:update_all", 
+            "photos:read_all", "photos:update_all",
+            "albums:write", "albums:read",
             "users:read", "users:update", "users:delete", "users:update_all",
             "admin:content", "system:health", "system:metrics"
         ],
@@ -131,7 +141,8 @@ async def assign_role_permissions():
             # All permissions except super admin functions
             "photos:create", "photos:read", "photos:update", "photos:delete",
             "photos:read_all", "photos:update_all", "photos:delete_all", "photos:manage",
-            "users:read", "users:update", "users:delete", 
+            "albums:write", "albums:read",
+            "users:read", "users:update", "users:delete",
             "users:update_all", "users:delete_all", "users:manage",
             "admin:users", "admin:content", "admin:system", "admin:roles",
             "system:health", "system:metrics", "system:logs"

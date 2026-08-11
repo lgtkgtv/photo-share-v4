@@ -1,4 +1,4 @@
-name: Photo Share Service CI/CD
+name: CI
 
 on:
   push:
@@ -6,289 +6,102 @@ on:
   pull_request:
     branches: [ main ]
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/photo-share-service
-
 jobs:
   test:
-    name: Run Tests
+    name: Run test suite
     runs-on: ubuntu-latest
-    
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_PASSWORD: test_password
-          POSTGRES_USER: test_user
-          POSTGRES_DB: photo_share
-        options: >-
-          --health-cmd "pg_isready -U test_user -d photo_share"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-          
-      redis:
-        image: redis:7-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-        cache: 'pip'
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
 
-    - name: Install system dependencies
-      run: |
-        # Install PostgreSQL client tools
-        sudo apt-get update
-        sudo apt-get install -y postgresql-client
+      - name: Set up Python
+        run: uv python install 3.11
 
-    - name: Install dependencies
-      run: |
-        cd services/photoshare
-        python -m pip install --upgrade pip
-        pip install -r requirements_fixed.txt
-        pip install -r requirements_test.txt
+      - name: Install dependencies
+        run: uv sync --extra all
 
-    - name: Set up test environment
-      run: |
-        cd services/photoshare
-        # Create comprehensive test environment file
-        cat > .env << EOF
-        # Database Configuration for CI/CD
-        POSTGRES_DB=photo_share
-        POSTGRES_USER=test_user
-        POSTGRES_PASSWORD=test_password
-        DB_HOST=localhost
-        DB_PORT=5432
-        
-        # JWT Configuration for Testing
-        JWT_SECRET_KEY=test_secret_key_for_testing_32_chars_minimum_length_requirement_safe
-        JWT_ALGORITHM=HS256
-        JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
-        
-        # Environment Identification
-        ENVIRONMENT=test
-        DEBUG=false
-        TESTING=true
-        
-        # Security Settings for Testing
-        PASSWORD_MIN_LENGTH=8
-        PASSWORD_REQUIRE_UPPERCASE=true
-        PASSWORD_REQUIRE_LOWERCASE=true
-        PASSWORD_REQUIRE_DIGITS=true
-        PASSWORD_REQUIRE_SPECIAL=false
-        
-        # Rate Limiting Settings (relaxed for testing)
-        RATE_LIMIT_REQUESTS_PER_MINUTE=100
-        RATE_LIMIT_LOGIN_ATTEMPTS_PER_HOUR=20
-        ACCOUNT_LOCKOUT_ATTEMPTS=10
-        ACCOUNT_LOCKOUT_DURATION_MINUTES=5
-        
-        # Redis Configuration for Testing
-        REDIS_URL=redis://localhost:6379/0
-        USE_REDIS_CACHE=true
-        
-        # Test Database URL (explicit for CI)
-        DATABASE_URL=postgresql+asyncpg://test_user:test_password@localhost:5432/photo_share
-        EOF
-        
-        # Show environment for debugging
-        echo "=== Test Environment Configuration ==="
-        cat .env
-        echo "======================================"
+      # tests/unit/ is fully self-contained (SQLite in-memory, no live services).
+      # This is the "original unit tests" gate for this workflow.
+      - name: Run unit tests
+        run: uv run pytest tests/unit/ -v
 
-    - name: Install security tools
-      run: |
-        pip install bandit safety
+      # These two files were rewritten to be self-contained (SQLite, mocked
+      # dependencies) rather than requiring live auth-service/app-service
+      # instances -- everything else in tests/integration/ and tests/security/
+      # still does require live services and is intentionally not run here.
+      # See README.md "Current State" / "Testing & Validation" for the full
+      # breakdown of what is and isn't covered by this job.
+      - name: Run self-contained integration/security tests
+        run: |
+          uv run pytest tests/integration/test_media_endpoints.py -v
+          uv run pytest tests/security/test_waf_protection.py -v
 
-    - name: Wait for database to be ready
-      run: |
-        # Wait for PostgreSQL to be ready
-        for i in {1..30}; do
-          if PGPASSWORD=test_password pg_isready -h localhost -p 5432 -U test_user; then
-            echo "PostgreSQL is ready!"
-            break
-          fi
-          echo "Waiting for PostgreSQL... ($i/30)"
-          sleep 2
-        done
+      # Phase 1 product API (albums/shares/comments/tags/analytics + signed
+      # share-download URLs) -- 66 checks total, SQLite-backed, run as plain
+      # scripts rather than via pytest (see services/photoshare/tests/).
+      - name: Run Phase 1 product API e2e checks
+        run: |
+          uv run python services/photoshare/tests/test_albums_e2e.py
+          uv run python services/photoshare/tests/test_shares_comments_tags_analytics_e2e.py
+          uv run python services/photoshare/tests/test_share_download_e2e.py
 
-    - name: Test API endpoints
-      run: |
-        cd services/photoshare
-        # Start the service in background for API tests
-        python main_database.py &
-        SERVICE_PID=$!
-        
-        # Wait for service to start
-        for i in {1..30}; do
-          if curl -f http://localhost:8000/health; then
-            echo "Service is ready!"
-            break
-          fi
-          echo "Waiting for service... ($i/30)"
-          sleep 2
-        done
-        
-        # Kill the service
-        kill $SERVICE_PID || true
-
-    - name: Run security linting
-      run: |
-        cd services/photoshare
-        # Run bandit security linter
-        bandit -r . -f json -o bandit-report.json || true
-        bandit -r . || true
-
-    - name: Run dependency vulnerability check
-      run: |
-        cd services/photoshare
-        # Check for known vulnerabilities in dependencies
-        safety check -r requirements_fixed.txt || true
-
-    - name: Run comprehensive tests
-      run: |
-        cd services/photoshare
-        # Set environment variables for tests
-        export POSTGRES_DB=photo_share
-        export POSTGRES_USER=test_user
-        export POSTGRES_PASSWORD=test_password
-        export DB_HOST=localhost
-        export DB_PORT=5432
-        export ENVIRONMENT=test
-        export REDIS_URL=redis://localhost:6379/0
-        
-        # Run the test suite
-        python run_tests.py all
-
-    - name: Run API integration tests
-      run: |
-        # Test our security improvements and API endpoints
-        python3 scripts/test-security-improvements.py || true
-        
-        # Run API endpoint tests
-        bash scripts/api-tests/test-auth-flow.sh || true
-        bash scripts/api-tests/test-email-verification.sh || true
-        bash scripts/api-tests/test-photo-upload.sh || true
-
-    - name: Upload test artifacts
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: test-results
-        path: |
-          services/photoshare/bandit-report.json
-          services/photoshare/htmlcov/
-          services/photoshare/test-results/
-
-  security-scan:
-    name: Security Scan
+  docker-compose-smoke-test:
+    name: Docker Compose smoke test (real Postgres)
     runs-on: ubuntu-latest
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
-      with:
-        scan-type: 'fs'
-        scan-ref: '.'
-        format: 'sarif'
-        output: 'trivy-results.sarif'
+      - name: Generate env files
+        run: ./scripts/generate-env-files.sh
 
-    - name: Upload Trivy scan results to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@v3
-      if: always()
-      with:
-        sarif_file: 'trivy-results.sarif'
+      - name: Start services
+        run: docker compose -f docker-compose.separated.yml up --build -d
 
-  build:
-    name: Build Docker Images
-    runs-on: ubuntu-latest
-    needs: [test, security-scan]
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Wait for health checks
+        run: |
+          for i in $(seq 1 60); do
+            auth_ok=false
+            app_ok=false
+            curl -sf http://localhost:8001/health > /dev/null && auth_ok=true
+            curl -sf http://localhost:8000/health > /dev/null && app_ok=true
+            if [ "$auth_ok" = true ] && [ "$app_ok" = true ]; then
+              echo "Both services healthy"
+              exit 0
+            fi
+            echo "Waiting for services... ($i/60)"
+            sleep 5
+          done
+          echo "Services did not become healthy in time"
+          docker compose -f docker-compose.separated.yml logs
+          exit 1
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      - name: Register + login smoke test against real Postgres
+        run: |
+          set -e
+          curl -sf -X POST http://localhost:8001/api/auth/register \
+            -H "Content-Type: application/json" \
+            -d '{"email": "ci-smoke-test@example.com", "password": "TestPass123!", "first_name": "CI", "last_name": "Smoke"}'
+          TOKEN=$(curl -sf -X POST http://localhost:8001/api/auth/login \
+            -F "username=ci-smoke-test@example.com" \
+            -F "password=TestPass123!" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+          test -n "$TOKEN"
+          # Proves the auth service and app service share the same JWT secret
+          # (a real, previously-broken bug fixed in this codebase -- see
+          # docker-compose.separated.yml's comment on JWT_SECRET_KEY).
+          curl -sf -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/photos/
 
-    - name: Log in to Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.CR_PAT || secrets.GITHUB_TOKEN }}
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.separated.yml logs
 
-    - name: Extract metadata
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=sha,prefix=sha-
-          type=raw,value=latest,enable={{is_default_branch}}
-
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: ./services/photoshare
-        file: ./services/photoshare/Dockerfile.database
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-        build-args: |
-          ENVIRONMENT=production
-
-  deploy-staging:
-    name: Deploy to Staging
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.ref == 'refs/heads/develop'
-    environment: staging
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    # Add deployment steps here (e.g., deploy to staging environment)
-    - name: Deploy to staging
-      run: |
-        echo "Deploying to staging environment..."
-        # Add actual deployment commands here
-
-  deploy-production:
-    name: Deploy to Production
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.ref == 'refs/heads/main'
-    environment: production
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    # Add deployment steps here (e.g., deploy to production)
-    - name: Deploy to production
-      run: |
-        echo "Deploying to production environment..."
-        # Add actual deployment commands here
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.separated.yml down -v

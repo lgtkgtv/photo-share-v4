@@ -443,15 +443,21 @@ class AuthDatabaseManager:
     async def initialize(self):
         """Initialize database connection."""
         try:
-            self.engine = create_async_engine(
-                AUTH_DATABASE_URL,
-                echo=os.getenv("SQL_ECHO", "false").lower() == "true",
-                pool_size=20,
-                max_overflow=0,
-                pool_pre_ping=True,
-                pool_recycle=3600
-            )
-            
+            engine_kwargs = {
+                "echo": os.getenv("SQL_ECHO", "false").lower() == "true",
+            }
+            # SQLite's async driver uses a single StaticPool connection and doesn't
+            # accept QueuePool-only kwargs like pool_size/max_overflow/pool_recycle.
+            if not AUTH_DATABASE_URL.startswith("sqlite"):
+                engine_kwargs.update(
+                    pool_size=20,
+                    max_overflow=0,
+                    pool_pre_ping=True,
+                    pool_recycle=3600,
+                )
+
+            self.engine = create_async_engine(AUTH_DATABASE_URL, **engine_kwargs)
+
             self.session_factory = async_sessionmaker(
                 self.engine,
                 class_=AsyncSession,

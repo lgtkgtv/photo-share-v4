@@ -69,10 +69,13 @@ services:
     environment:
       - ENVIRONMENT=production
       - AUTH_SERVICE_URL=http://auth-service:8000
-      - JWT_SECRET_KEY=AnotherVeryStrongJWTSecretKeyForAuthentication2024AbCdEfGhIj
       - JWT_ALGORITHM=HS256
       - JWT_AUDIENCE=photoshare-app
       - JWT_ISSUER=photoshare-auth
+    # JWT_SECRET_KEY intentionally comes from .env.application (below), not a
+    # hardcoded value here -- it must match the auth service's JWT_SECRET_KEY
+    # exactly (see .env.auth-service.example), and env_file values would be
+    # silently overridden by anything set inline in `environment:` above.
     env_file:
       - .env.application
     depends_on:

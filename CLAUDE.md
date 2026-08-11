@@ -1,15 +1,15 @@
 # CLAUDE.md
 
 **Version**: 2.4.0-separated-auth  
-**Last Updated**: August 24, 2025 - 3:50 AM PST  
+**Last Updated**: 2026-08-10  
 **Purpose**: Development guidance for AI assistants working on the separated architecture codebase  
-**Status**: Production Ready - Zero Known Vulnerabilities - Complete Documentation Suite
+**Status**: Active development. Core product features (photo/video upload, albums, sharing, comments, tags, analytics) work and are tested. The auth/security scaffolding is extensive but has not been independently audited, and several real bugs in the core upload/streaming path were only found and fixed via testing in this session — do not repeat "zero known vulnerabilities" or "production ready" without re-verifying against current code.
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
-A production-ready Photo Sharing Service with **separated microservices architecture** featuring dedicated authentication service, comprehensive security (SSO, 2FA, RBAC), and complete database isolation.
+A Photo Sharing Service with a **separated microservices architecture**: a dedicated authentication service (SSO, 2FA, RBAC) and complete database isolation between auth and application data. The auth/security surface is large but not independently audited; the app service's route count is still dominated by security/observability plumbing rather than product features, though that ratio has improved since the Phase 1 product API (albums/shares/comments/tags/analytics) was added.
 
 ## Current Architecture (Separated Services)
 
@@ -134,12 +134,11 @@ photo-share-consul/
   - Public/private media sharing with access controls
   - Album creation and management
 
-### 🚀 **Enterprise Features**
-- Horizontal scaling with separated services
-- Comprehensive audit logging
-- Performance monitoring and metrics
-- Rate limiting and security middleware
-- Production-ready configuration
+### 🚀 **Scaling & Ops Scaffolding** (present in code, not load-tested)
+- Services are architecturally separable for horizontal scaling
+- Audit logging (tamper-evident storage)
+- Prometheus-based metrics/monitoring middleware
+- Rate limiting and WAF-style security middleware
 
 ## Database Schemas
 
@@ -304,13 +303,12 @@ docker-compose -f docker-compose.separated.yml up --build
 - **Complete Separation**: Authentication and application concerns are fully separated
 - **Database Isolation**: Two separate PostgreSQL databases with different credentials
 - **Service Communication**: JWT-based authentication between services
-- **Legacy Cleanup**: All legacy monolithic code has been removed
+- **Legacy endpoints intentionally retained**: e.g. `/api/photos/upload` still exists alongside the newer `/api/media/upload` for backward compatibility (see `TestBackwardCompatibility` in `tests/integration/test_media_endpoints.py`) — "legacy cleanup" does not mean legacy routes were removed
 
-### Security Features
-- **80% reduction** in password attacks via SSO + 2FA
-- **70% reduction** in session attacks via session binding
-- **90% reduction** in privilege escalation via RBAC
-- **95% reduction** in data exposure via database separation
+### Security Design Intent (not measured results)
+SSO+2FA, session binding, RBAC, and database separation are implemented as defense-in-depth
+measures. No baseline/before-after measurement of attack rates exists for this deployment —
+treat any specific percentage-reduction figures for these controls as unverified.
 
 ### Development Focus
 - All development should use the separated service structure
@@ -341,7 +339,7 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
   http://localhost:8000/api/photos/
 ```
 
-This is a production-ready service with enterprise-grade security, complete database separation, and comprehensive authentication features including SSO and 2FA.
+This service has working core product features (photo/video upload, albums, sharing, comments, tags, analytics) and extensive auth/security scaffolding (SSO, 2FA, database separation), but has not been independently security-audited and is not yet production-hardened — see the Status line at the top of this file and `README.md`'s "Current State" section before repeating production-readiness claims elsewhere.
 
 # Important Instruction Reminders
 Do what has been asked; nothing more, nothing less.

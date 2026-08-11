@@ -138,9 +138,14 @@ try:
 except ImportError:
     THREAT_DETECTION_AVAILABLE = False
 
-# Security middleware  
+# Security middleware
 security = HTTPBearer()
 logger = logging.getLogger(__name__)
+
+# Root of the local file store -- must match FileStorageService's STORAGE_PATH
+# (services/photoshare/file_storage.py), since media_record.storage_path values
+# are relative paths written under that root (users/{uuid}/photos/{filename}).
+UPLOAD_DIR = os.getenv("STORAGE_PATH", "/app/storage")
 
 # Application lifespan management
 @asynccontextmanager
@@ -2112,7 +2117,7 @@ async def upload_media(
         # Log security event
         log_security_event(
             severity=AlertSeverity.MEDIUM,
-            threat_type=ThreatType.UPLOAD_SECURITY,
+            threat_type=ThreatType.MALICIOUS_FILE_UPLOAD,
             source_ip=getattr(current_user, 'source_ip', 'unknown'),
             endpoint="/api/media/upload",
             method="POST",
@@ -2162,34 +2167,38 @@ async def process_video_upload(
         
         # 4. Store video file
         file_storage = FileStorageService()
-        storage_path = await file_storage.store_file(file_content, unique_filename)
-        
+        storage_info = await file_storage.store_file(
+            current_user.uuid, unique_filename, file_content, file.content_type
+        )
+        storage_path = storage_info["storage_path"]
+
         # 5. Generate thumbnail
         thumbnail_filename = f"{uuid.uuid4()}_thumb.jpg"
         thumbnail_temp_path = f"/tmp/{thumbnail_filename}"
-        
+
         # Extract thumbnail at 10% of video duration (or 1 second minimum)
         thumbnail_timestamp = max(1.0, video_metadata.get('duration', 10) * 0.1)
         thumbnail_success = await video_processor.generate_thumbnail(
-            temp_file_path, 
+            temp_file_path,
             thumbnail_temp_path,
             timestamp=thumbnail_timestamp,
             width=640,
             height=480
         )
-        
+
         thumbnail_storage_path = None
         if thumbnail_success and os.path.exists(thumbnail_temp_path):
             with open(thumbnail_temp_path, 'rb') as thumb_file:
                 thumbnail_content = thumb_file.read()
-            thumbnail_storage_path = await file_storage.store_file(
-                thumbnail_content, thumbnail_filename
+            thumbnail_storage_info = await file_storage.store_file(
+                current_user.uuid, thumbnail_filename, thumbnail_content, "image/jpeg"
             )
+            thumbnail_storage_path = thumbnail_storage_info["storage_path"]
             os.remove(thumbnail_temp_path)
         
         # 6. Create media record
         media_record = Media(
-            user_uuid=current_user.user_uuid,
+            user_uuid=current_user.uuid,
             user_email=current_user.email,
             filename=unique_filename,
             original_filename=file.filename,
@@ -2224,7 +2233,7 @@ async def process_video_upload(
                 action="video_upload",
                 resource_type="media",
                 resource_id=str(media_record.id),
-                user_id=current_user.user_uuid,
+                user_id=current_user.uuid,
                 source_ip=getattr(current_user, 'source_ip', 'unknown'),
                 endpoint="/api/media/upload",
                 details={
@@ -2350,11 +2359,14 @@ async def process_photo_upload(
     
     # Store file
     file_storage = FileStorageService()
-    storage_path = await file_storage.store_file(file_content, unique_filename)
-    
+    storage_info = await file_storage.store_file(
+        current_user.uuid, unique_filename, file_content, file.content_type
+    )
+    storage_path = storage_info["storage_path"]
+
     # Create media record
     media_record = Media(
-        user_uuid=current_user.user_uuid,
+        user_uuid=current_user.uuid,
         user_email=current_user.email,
         filename=unique_filename,
         original_filename=file.filename,
@@ -2367,20 +2379,20 @@ async def process_photo_upload(
         is_public=is_public,
         processing_status='completed'
     )
-    
+
     # Save to database
     async with app_db.get_session() as session:
         session.add(media_record)
         await session.commit()
         await session.refresh(media_record)
-    
+
     # Log audit event
     if AUDIT_TRAIL_AVAILABLE:
         await log_audit(
             action="photo_upload",
             resource_type="media",
             resource_id=str(media_record.id),
-            user_id=current_user.user_uuid,
+            user_id=current_user.uuid,
             source_ip=getattr(current_user, 'source_ip', 'unknown'),
             endpoint="/api/media/upload",
             details={
@@ -2444,11 +2456,11 @@ async def stream_media(
         
         # Permission check
         if not media_record.is_public:
-            if not current_user or media_record.user_id != current_user.user_id:
+            if not current_user or media_record.user_uuid != current_user.uuid:
                 raise HTTPException(status_code=403, detail="Access denied")
-        
+
         # Construct file path
-        file_path = os.path.join(UPLOAD_DIR, media_record.filename)
+        file_path = os.path.join(UPLOAD_DIR, media_record.storage_path)
         if not os.path.exists(file_path):
             logger.error(f"Video file not found on disk: {file_path}")
             raise HTTPException(status_code=404, detail="Video file not found")
@@ -2528,19 +2540,20 @@ async def get_media_thumbnail(
         
         # Permission check
         if not media_record.is_public:
-            if not current_user or media_record.user_id != current_user.user_id:
+            if not current_user or media_record.user_uuid != current_user.uuid:
                 raise HTTPException(status_code=403, detail="Access denied")
-        
+
         # For videos, look for generated thumbnail
         if media_record.media_type == 'video':
-            thumbnail_filename = f"thumb_{os.path.splitext(media_record.filename)[0]}.jpg"
-            thumbnail_path = os.path.join(UPLOAD_DIR, "thumbnails", thumbnail_filename)
-            
-            if not os.path.exists(thumbnail_path):
+            thumbnail_path = os.path.join(UPLOAD_DIR, media_record.thumbnail_path) if media_record.thumbnail_path else None
+
+            if not thumbnail_path or not os.path.exists(thumbnail_path):
                 # Try to generate thumbnail if it doesn't exist
-                if VIDEO_PROCESSOR_AVAILABLE:
-                    original_path = os.path.join(UPLOAD_DIR, media_record.filename)
+                if VIDEO_PROCESSING_AVAILABLE:
+                    original_path = os.path.join(UPLOAD_DIR, media_record.storage_path)
                     if os.path.exists(original_path):
+                        thumbnail_filename = f"thumb_{os.path.splitext(os.path.basename(media_record.storage_path))[0]}.jpg"
+                        thumbnail_path = os.path.join(UPLOAD_DIR, "thumbnails", thumbnail_filename)
                         os.makedirs(os.path.dirname(thumbnail_path), exist_ok=True)
                         success = await video_processor.generate_thumbnail(
                             original_path, thumbnail_path, timestamp=1.0
@@ -2551,16 +2564,16 @@ async def get_media_thumbnail(
                         raise HTTPException(status_code=404, detail="Original video file not found")
                 else:
                     raise HTTPException(status_code=404, detail="Video thumbnail not available")
-            
+
             logger.info(f"Serving video thumbnail: media_id={media_id}, user_id={current_user.user_id if current_user else None}")
             return FileResponse(path=thumbnail_path, media_type="image/jpeg")
-        
+
         # For photos, return the original image (could add thumbnail generation later)
         else:
-            file_path = os.path.join(UPLOAD_DIR, media_record.filename)
+            file_path = os.path.join(UPLOAD_DIR, media_record.storage_path)
             if not os.path.exists(file_path):
                 raise HTTPException(status_code=404, detail="Photo file not found")
-            
+
             logger.info(f"Serving photo: media_id={media_id}, user_id={current_user.user_id if current_user else None}")
             return FileResponse(path=file_path, media_type=media_record.content_type)
         
@@ -2589,9 +2602,9 @@ async def get_media_metadata(
         
         # Permission check
         if not media_record.is_public:
-            if not current_user or media_record.user_id != current_user.user_id:
+            if not current_user or media_record.user_uuid != current_user.uuid:
                 raise HTTPException(status_code=403, detail="Access denied")
-        
+
         # Base metadata
         metadata = {
             "id": media_record.id,
@@ -2602,7 +2615,7 @@ async def get_media_metadata(
             "file_size": media_record.file_size,
             "created_at": media_record.created_at.isoformat(),
             "is_public": media_record.is_public,
-            "user_id": media_record.user_id
+            "user_id": media_record.user_uuid
         }
         
         # Add video-specific metadata

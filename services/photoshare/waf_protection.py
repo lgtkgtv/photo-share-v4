@@ -94,9 +94,14 @@ class WAFProtection:
             r"web\.config",  # IIS config file
         ]
         
-        # Command injection patterns
+        # Command injection patterns.
+        # Deliberately no longer includes a bare shell-metacharacter class
+        # (r"[;&|`$(){}]"): a single stray ';', '&', '(', etc. is extremely common
+        # in benign text (User-Agent strings, JSON bodies, query strings) and made
+        # this the single biggest source of WAF false positives. Real injection
+        # attempts pair a metacharacter with an actual command or chaining syntax,
+        # which the patterns below already catch.
         self.command_injection_patterns = [
-            r"[;&|`$(){}]",  # Shell metacharacters
             r"\b(cat|ls|ps|id|whoami|uname|netstat|ifconfig)\b",  # Common commands
             r"(&&|\|\|)",  # Command chaining
             r"\$\([^)]+\)",  # Command substitution
@@ -124,7 +129,12 @@ class WAFProtection:
         }
         
         # File upload restrictions
-        self.allowed_extensions = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
+        self.allowed_extensions = {
+            # Photos
+            ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp",
+            # Videos (see video_processing/video_processor.py SUPPORTED_FORMATS)
+            ".mp4", ".avi", ".mov", ".webm", ".mkv", ".flv", ".wmv", ".m4v", ".3gp", ".ogv",
+        }
         self.blocked_extensions = {
             ".php", ".asp", ".jsp", ".py", ".pl", ".cgi", ".sh", ".bat", 
             ".exe", ".dll", ".so", ".jar", ".war", ".ear"

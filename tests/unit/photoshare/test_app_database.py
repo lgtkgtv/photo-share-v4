@@ -535,16 +535,22 @@ class TestAppDatabaseManager:
     async def test_health_check_success(self, db_manager):
         """Test successful health check."""
         mock_session = AsyncMock()
-        mock_session.execute = AsyncMock()
-        
+        # health_check() calls the *sync* Result.scalar() on the awaited execute()
+        # result -- AsyncMock() auto-creates async children, so scalar() must be
+        # pinned to a plain Mock or it returns an unawaited coroutine (falsy).
+        mock_result = Mock()
+        mock_result.scalar = Mock(return_value=1)
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
         # Create a proper async context manager mock
         def mock_session_factory():
             return MockAsyncContextManager(mock_session)
-        
+
+        db_manager.engine = Mock()  # health_check() short-circuits to unhealthy if engine is unset
         db_manager.session_factory = mock_session_factory
-        
+
         result = await db_manager.health_check()
-        
+
         assert result is True
     
     @pytest.mark.asyncio

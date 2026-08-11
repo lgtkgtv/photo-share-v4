@@ -1,376 +1,240 @@
 #!/usr/bin/env python3
 """
 Unit tests for monitoring functionality.
+
+Rewritten to match the actual monitoring implementation
+(services/photoshare/monitoring.py). The classes this file used to test
+(MetricsCollector, PerformanceMonitor, HealthChecker, SecurityMonitor,
+RequestMetrics) do not exist in the codebase -- the real module wraps
+prometheus_client directly (PrometheusMetrics, MonitoringMiddleware,
+MonitoringDashboard) rather than rolling its own in-memory stats/health/
+security tracking.
 """
+import uuid
+
 import pytest
-import time
-from unittest.mock import Mock, AsyncMock, patch
-from datetime import datetime, timezone
+from unittest.mock import AsyncMock, Mock, patch
+from fastapi import Request
+from fastapi.responses import Response as FastAPIResponse
 
 from services.photoshare.monitoring import (
-    MetricsCollector, PerformanceMonitor, HealthChecker,
-    SecurityMonitor, RequestMetrics
+    PrometheusMetrics, MonitoringMiddleware, MonitoringDashboard,
+    record_request_metric, record_database_metric, record_cache_metric,
+    record_error_metric, record_auth_metric, record_rate_limit_metric,
+    monitoring_dashboard,
 )
 
 
-class TestRequestMetrics:
-    """Test Request Metrics data class."""
-    
-    def test_request_metrics_creation(self):
-        """Test request metrics creation."""
-        start_time = time.time()
-        metrics = RequestMetrics(
-            method="GET",
-            endpoint="/api/photos",
-            status_code=200,
-            response_time=0.123,
-            user_id="user123",
-            request_size=512,
-            response_size=2048,
-            timestamp=start_time
-        )
-        
-        assert metrics.method == "GET"
-        assert metrics.endpoint == "/api/photos"
-        assert metrics.status_code == 200
-        assert metrics.response_time == 0.123
-        assert metrics.user_id == "user123"
-        assert metrics.request_size == 512
-        assert metrics.response_size == 2048
-        assert metrics.timestamp == start_time
-    
-    def test_request_metrics_to_dict(self):
-        """Test request metrics serialization."""
-        metrics = RequestMetrics(
-            method="POST",
-            endpoint="/api/photos/upload",
-            status_code=201,
-            response_time=1.5
-        )
-        
-        metrics_dict = metrics.to_dict()
-        
-        assert metrics_dict["method"] == "POST"
-        assert metrics_dict["endpoint"] == "/api/photos/upload"
-        assert metrics_dict["status_code"] == 201
-        assert metrics_dict["response_time"] == 1.5
+def _unique_service_name():
+    # prometheus_client registers metrics globally by name; each test needs
+    # its own namespace or it collides with metrics from other tests / the
+    # module-level `monitoring_dashboard` singleton.
+    return f"test_{uuid.uuid4().hex[:8]}"
 
 
-class TestMetricsCollector:
-    """Test Metrics Collector functionality."""
-    
+@pytest.fixture
+def metrics():
+    return PrometheusMetrics(service_name=_unique_service_name())
+
+
+class TestPrometheusMetricsRecording:
+    def test_record_request_updates_counter_and_histogram(self, metrics):
+        metrics.record_request("GET", "/api/photos", 200, 0.25)
+
+        count = metrics.requests_total.labels(method="GET", endpoint="/api/photos", status_code="200")._value.get()
+        assert count == 1
+
+    def test_record_database_query_success(self, metrics):
+        metrics.record_database_query("select", 0.01, success=True)
+
+        count = metrics.database_queries_total.labels(query_type="select", status="success")._value.get()
+        assert count == 1
+
+    def test_record_database_query_failure(self, metrics):
+        metrics.record_database_query("insert", 0.02, success=False)
+
+        count = metrics.database_queries_total.labels(query_type="insert", status="error")._value.get()
+        assert count == 1
+
+    def test_record_cache_operation(self, metrics):
+        metrics.record_cache_operation("get", "hit")
+
+        count = metrics.cache_operations_total.labels(operation="get", result="hit")._value.get()
+        assert count == 1
+
+    def test_record_error(self, metrics):
+        metrics.record_error("validation_error", severity="warning")
+
+        count = metrics.errors_total.labels(error_type="validation_error", severity="warning")._value.get()
+        assert count == 1
+
+    def test_record_authentication_attempt_success_and_failure(self, metrics):
+        metrics.record_authentication_attempt(True)
+        metrics.record_authentication_attempt(False)
+
+        assert metrics.authentication_attempts.labels(result="success")._value.get() == 1
+        assert metrics.authentication_attempts.labels(result="failure")._value.get() == 1
+
+    def test_record_rate_limit_hit(self, metrics):
+        metrics.record_rate_limit_hit("anonymous")
+
+        count = metrics.rate_limit_hits.labels(client_type="anonymous")._value.get()
+        assert count == 1
+
+    def test_update_service_info(self, metrics):
+        metrics.update_service_info(version="9.9.9", database_type="postgresql", cache_type="memory")
+
+        value = metrics.service_info.labels(version="9.9.9", database_type="postgresql", cache_type="memory")._value.get()
+        assert value == 1
+
+    def test_update_business_metrics(self, metrics):
+        metrics.update_business_metrics(users_count=10, photos_count=20, active_sessions_count=3)
+
+        assert metrics.users_total._value.get() == 10
+        assert metrics.photos_total._value.get() == 20
+        assert metrics.active_sessions._value.get() == 3
+
+    def test_update_infrastructure_metrics(self, metrics):
+        metrics.update_infrastructure_metrics(active_connections=5, cache_size=42)
+
+        assert metrics.database_connections_active._value.get() == 5
+        assert metrics.memory_cache_size._value.get() == 42
+
+    def test_get_metrics_returns_prometheus_text_format(self, metrics):
+        metrics.record_request("GET", "/api/photos", 200, 0.1)
+        output = metrics.get_metrics()
+
+        assert isinstance(output, bytes)
+        assert metrics.service_name.encode() in output
+
+
+class TestMonitoringMiddleware:
     @pytest.fixture
-    def metrics_collector(self):
-        """Create metrics collector instance."""
-        return MetricsCollector()
-    
-    def test_metrics_collector_initialization(self, metrics_collector):
-        """Test metrics collector initialization."""
-        assert len(metrics_collector.request_metrics) == 0
-        assert metrics_collector.start_time is not None
-        assert metrics_collector.total_requests == 0
-    
-    def test_record_request_metric(self, metrics_collector):
-        """Test recording request metrics."""
-        metrics = RequestMetrics(
-            method="GET",
-            endpoint="/api/photos",
-            status_code=200,
-            response_time=0.5
-        )
-        
-        metrics_collector.record_request(metrics)
-        
-        assert len(metrics_collector.request_metrics) == 1
-        assert metrics_collector.total_requests == 1
-        assert metrics_collector.request_metrics[0].method == "GET"
-    
-    def test_get_request_stats(self, metrics_collector):
-        """Test getting request statistics."""
-        # Record multiple requests
-        metrics_collector.record_request(RequestMetrics("GET", "/api/photos", 200, 0.1))
-        metrics_collector.record_request(RequestMetrics("POST", "/api/photos", 201, 0.5))
-        metrics_collector.record_request(RequestMetrics("GET", "/api/photos", 404, 0.2))
-        
-        stats = metrics_collector.get_request_stats()
-        
-        assert stats["total_requests"] == 3
-        assert stats["avg_response_time"] == 0.26666666666666666  # (0.1 + 0.5 + 0.2) / 3
-        assert stats["success_rate"] == 66.67  # 2/3 * 100
-        assert "status_codes" in stats
-        assert stats["status_codes"]["200"] == 1
-        assert stats["status_codes"]["201"] == 1
-        assert stats["status_codes"]["404"] == 1
-    
-    def test_get_endpoint_stats(self, metrics_collector):
-        """Test getting endpoint-specific statistics."""
-        metrics_collector.record_request(RequestMetrics("GET", "/api/photos", 200, 0.1))
-        metrics_collector.record_request(RequestMetrics("GET", "/api/photos", 200, 0.2))
-        metrics_collector.record_request(RequestMetrics("POST", "/api/photos", 201, 0.5))
-        
-        stats = metrics_collector.get_endpoint_stats()
-        
-        assert "/api/photos" in stats
-        assert stats["/api/photos"]["total_requests"] == 3
-        assert stats["/api/photos"]["avg_response_time"] == 0.26666666666666666
-    
-    def test_get_user_stats(self, metrics_collector):
-        """Test getting user-specific statistics."""
-        metrics_collector.record_request(RequestMetrics("GET", "/api/photos", 200, 0.1, "user1"))
-        metrics_collector.record_request(RequestMetrics("GET", "/api/photos", 200, 0.2, "user1"))
-        metrics_collector.record_request(RequestMetrics("POST", "/api/photos", 201, 0.5, "user2"))
-        
-        stats = metrics_collector.get_user_stats()
-        
-        assert "user1" in stats
-        assert "user2" in stats
-        assert stats["user1"]["total_requests"] == 2
-        assert stats["user2"]["total_requests"] == 1
-    
-    def test_cleanup_old_metrics(self, metrics_collector):
-        """Test cleanup of old metrics."""
-        old_time = time.time() - 7200  # 2 hours ago
-        recent_time = time.time()
-        
-        metrics_collector.record_request(RequestMetrics("GET", "/api/photos", 200, 0.1, timestamp=old_time))
-        metrics_collector.record_request(RequestMetrics("GET", "/api/photos", 200, 0.2, timestamp=recent_time))
-        
-        assert len(metrics_collector.request_metrics) == 2
-        
-        metrics_collector.cleanup_old_metrics(max_age_hours=1)
-        
-        assert len(metrics_collector.request_metrics) == 1
-        assert metrics_collector.request_metrics[0].timestamp == recent_time
+    def middleware(self, metrics):
+        return MonitoringMiddleware(metrics)
+
+    @staticmethod
+    def _make_request(path="/api/photos"):
+        request = Mock(spec=Request)
+        request.url = Mock()
+        request.url.path = path
+        request.method = "GET"
+        return request
+
+    @pytest.mark.asyncio
+    async def test_call_records_successful_request(self, middleware, metrics):
+        request = self._make_request()
+        response = Mock()
+        response.status_code = 200
+        call_next = AsyncMock(return_value=response)
+
+        result = await middleware(request, call_next)
+
+        assert result is response
+        count = metrics.requests_total.labels(method="GET", endpoint="/api/photos", status_code="200")._value.get()
+        assert count == 1
+
+    @pytest.mark.asyncio
+    async def test_call_records_error_and_reraises(self, middleware, metrics):
+        request = self._make_request()
+        call_next = AsyncMock(side_effect=RuntimeError("boom"))
+
+        with pytest.raises(RuntimeError):
+            await middleware(request, call_next)
+
+        count = metrics.requests_total.labels(method="GET", endpoint="/api/photos", status_code="500")._value.get()
+        assert count == 1
+        error_count = metrics.errors_total.labels(error_type="request_processing_error", severity="error")._value.get()
+        assert error_count == 1
+
+    def test_normalize_endpoint_collapses_photo_id(self, middleware):
+        assert middleware._normalize_endpoint("/api/photos/123") == "/api/photos/{id}"
+
+    def test_normalize_endpoint_collapses_photo_id_subresource(self, middleware):
+        assert middleware._normalize_endpoint("/api/photos/123/download") == "/api/photos/{id}/download"
+
+    def test_normalize_endpoint_collapses_service_name(self, middleware):
+        assert middleware._normalize_endpoint("/api/platform/services/auth-service") == "/api/platform/services/{service_name}"
+
+    def test_normalize_endpoint_leaves_other_paths_untouched(self, middleware):
+        assert middleware._normalize_endpoint("/health") == "/health"
 
 
-class TestPerformanceMonitor:
-    """Test Performance Monitor functionality."""
-    
+class TestMonitoringDashboard:
     @pytest.fixture
-    def performance_monitor(self):
-        """Create performance monitor instance."""
-        return PerformanceMonitor()
-    
-    def test_performance_monitor_initialization(self, performance_monitor):
-        """Test performance monitor initialization."""
-        assert performance_monitor.metrics_collector is not None
-        assert len(performance_monitor.system_metrics) == 0
-    
+    def dashboard(self):
+        return MonitoringDashboard(service_name=_unique_service_name())
+
+    def test_init_sets_service_info(self, dashboard):
+        value = dashboard.metrics.service_info.labels(
+            version="2.3.0-monitoring", database_type="postgresql", cache_type="memory"
+        )._value.get()
+        assert value == 1
+
+    def test_get_monitoring_dashboard_shape(self, dashboard):
+        data = dashboard.get_monitoring_dashboard()
+
+        assert data["monitoring_system"]["service_name"] == dashboard.service_name
+        assert data["monitoring_system"]["prometheus_endpoint"] == "/metrics"
+        assert "metrics_summary" in data
+        assert data["health_status"]["service_healthy"] is True
+        assert "timestamp" in data
+
     @pytest.mark.asyncio
-    async def test_collect_system_metrics(self, performance_monitor):
-        """Test system metrics collection."""
-        with patch('psutil.cpu_percent', return_value=45.5):
-            with patch('psutil.virtual_memory') as mock_memory:
-                mock_memory.return_value.percent = 67.8
-                mock_memory.return_value.used = 8589934592  # 8GB
-                mock_memory.return_value.total = 17179869184  # 16GB
-                
-                with patch('psutil.disk_usage') as mock_disk:
-                    mock_disk.return_value.percent = 23.4
-                    mock_disk.return_value.used = 1073741824  # 1GB
-                    mock_disk.return_value.total = 10737418240  # 10GB
-                    
-                    metrics = await performance_monitor.collect_system_metrics()
-                    
-                    assert metrics["cpu_percent"] == 45.5
-                    assert metrics["memory_percent"] == 67.8
-                    assert metrics["disk_percent"] == 23.4
-                    assert "timestamp" in metrics
-    
-    @pytest.mark.asyncio
-    async def test_get_performance_report(self, performance_monitor):
-        """Test performance report generation."""
-        # Add some test metrics
-        performance_monitor.system_metrics = [
-            {"cpu_percent": 45.5, "memory_percent": 67.8, "timestamp": time.time()},
-            {"cpu_percent": 52.3, "memory_percent": 71.2, "timestamp": time.time()},
-        ]
-        
-        # Add request metrics
-        performance_monitor.metrics_collector.record_request(
-            RequestMetrics("GET", "/api/photos", 200, 0.1)
+    async def test_update_business_metrics_from_stats(self, dashboard):
+        await dashboard.update_business_metrics_from_stats(
+            {"registered_users": 5, "total_photos": 12, "active_sessions": 2}
         )
-        
-        report = await performance_monitor.get_performance_report()
-        
-        assert "system_metrics" in report
-        assert "request_metrics" in report
-        assert "uptime" in report
-        assert report["system_metrics"]["avg_cpu_percent"] == 48.9
-        assert report["system_metrics"]["avg_memory_percent"] == 69.5
-    
-    def test_is_system_healthy(self, performance_monitor):
-        """Test system health checking."""
-        # Healthy system
-        healthy_metrics = {
-            "cpu_percent": 45.0,
-            "memory_percent": 60.0,
-            "disk_percent": 40.0
-        }
-        assert performance_monitor.is_system_healthy(healthy_metrics) is True
-        
-        # Unhealthy system (high CPU)
-        unhealthy_metrics = {
-            "cpu_percent": 95.0,
-            "memory_percent": 60.0,
-            "disk_percent": 40.0
-        }
-        assert performance_monitor.is_system_healthy(unhealthy_metrics) is False
+
+        assert dashboard.metrics.users_total._value.get() == 5
+        assert dashboard.metrics.photos_total._value.get() == 12
+        assert dashboard.metrics.active_sessions._value.get() == 2
+
+    @pytest.mark.asyncio
+    async def test_update_metrics_from_performance_data(self, dashboard):
+        await dashboard.update_metrics_from_performance_data({
+            "cache_performance": {"cache_hits": 10, "cache_misses": 2, "memory_cache_size": 7},
+            "query_performance": {"query_statistics": {"select_photos": {"average_time": 0.05}}},
+        })
+
+        assert dashboard.metrics.memory_cache_size._value.get() == 7
+
+    def test_get_prometheus_metrics_returns_fastapi_response(self, dashboard):
+        response = dashboard.get_prometheus_metrics()
+
+        assert isinstance(response, FastAPIResponse)
+        assert response.headers["Cache-Control"] == "no-cache"
 
 
-class TestHealthChecker:
-    """Test Health Checker functionality."""
-    
-    @pytest.fixture
-    def health_checker(self):
-        """Create health checker instance."""
-        return HealthChecker()
-    
-    @pytest.mark.asyncio
-    async def test_check_database_health_success(self, health_checker):
-        """Test successful database health check."""
-        mock_db = AsyncMock()
-        mock_db.health_check = AsyncMock(return_value=True)
-        
-        result = await health_checker.check_database_health(mock_db)
-        
-        assert result["status"] == "healthy"
-        assert result["response_time"] > 0
-        mock_db.health_check.assert_called_once()
-    
-    @pytest.mark.asyncio
-    async def test_check_database_health_failure(self, health_checker):
-        """Test failed database health check."""
-        mock_db = AsyncMock()
-        mock_db.health_check = AsyncMock(side_effect=Exception("Connection failed"))
-        
-        result = await health_checker.check_database_health(mock_db)
-        
-        assert result["status"] == "unhealthy"
-        assert "Connection failed" in result["error"]
-    
-    @pytest.mark.asyncio
-    async def test_check_auth_service_health_success(self, health_checker):
-        """Test successful auth service health check."""
-        mock_auth_client = AsyncMock()
-        mock_auth_client.health_check = AsyncMock(return_value={"status": "healthy"})
-        
-        result = await health_checker.check_auth_service_health(mock_auth_client)
-        
-        assert result["status"] == "healthy"
-        assert result["response_time"] > 0
-    
-    @pytest.mark.asyncio
-    async def test_check_storage_health(self, health_checker):
-        """Test storage health check."""
-        with patch('os.path.exists', return_value=True):
-            with patch('os.access', return_value=True):
-                with patch('os.statvfs') as mock_statvfs:
-                    mock_statvfs.return_value.f_bavail = 1000000
-                    mock_statvfs.return_value.f_frsize = 4096
-                    
-                    result = await health_checker.check_storage_health("/tmp/storage")
-                    
-                    assert result["status"] == "healthy"
-                    assert result["free_space_gb"] > 0
-    
-    @pytest.mark.asyncio
-    async def test_get_overall_health(self, health_checker):
-        """Test overall health assessment."""
-        with patch.object(health_checker, 'check_database_health') as mock_db_health:
-            with patch.object(health_checker, 'check_auth_service_health') as mock_auth_health:
-                with patch.object(health_checker, 'check_storage_health') as mock_storage_health:
-                    mock_db_health.return_value = {"status": "healthy"}
-                    mock_auth_health.return_value = {"status": "healthy"}
-                    mock_storage_health.return_value = {"status": "healthy"}
-                    
-                    health = await health_checker.get_overall_health(Mock(), Mock(), "/tmp")
-                    
-                    assert health["status"] == "healthy"
-                    assert "database" in health["services"]
-                    assert "auth_service" in health["services"]
-                    assert "storage" in health["services"]
+class TestConvenienceFunctions:
+    """Test the module-level helpers that delegate to the global monitoring_dashboard."""
 
+    def test_record_request_metric_delegates(self):
+        with patch.object(monitoring_dashboard.metrics, "record_request") as mock_record:
+            record_request_metric("POST", "/api/photos/upload", 201, 0.4)
+        mock_record.assert_called_once_with("POST", "/api/photos/upload", 201, 0.4)
 
-class TestSecurityMonitor:
-    """Test Security Monitor functionality."""
-    
-    @pytest.fixture
-    def security_monitor(self):
-        """Create security monitor instance."""
-        return SecurityMonitor()
-    
-    def test_security_monitor_initialization(self, security_monitor):
-        """Test security monitor initialization."""
-        assert len(security_monitor.security_events) == 0
-        assert len(security_monitor.failed_attempts) == 0
-    
-    def test_record_security_event(self, security_monitor):
-        """Test recording security events."""
-        security_monitor.record_security_event(
-            event_type="failed_login",
-            user_id="user123",
-            ip_address="192.168.1.100",
-            details={"reason": "invalid_password"}
-        )
-        
-        assert len(security_monitor.security_events) == 1
-        event = security_monitor.security_events[0]
-        assert event["event_type"] == "failed_login"
-        assert event["user_id"] == "user123"
-        assert event["ip_address"] == "192.168.1.100"
-    
-    def test_record_failed_attempt(self, security_monitor):
-        """Test recording failed login attempts."""
-        security_monitor.record_failed_attempt("user123", "192.168.1.100")
-        security_monitor.record_failed_attempt("user123", "192.168.1.100")
-        
-        attempts = security_monitor.get_failed_attempts("user123")
-        assert len(attempts) == 2
-    
-    def test_is_account_locked(self, security_monitor):
-        """Test account lockout detection."""
-        # Record multiple failed attempts
-        for _ in range(5):
-            security_monitor.record_failed_attempt("user123", "192.168.1.100")
-        
-        assert security_monitor.is_account_locked("user123") is True
-        assert security_monitor.is_account_locked("user456") is False
-    
-    def test_is_ip_suspicious(self, security_monitor):
-        """Test suspicious IP detection."""
-        # Record multiple failed attempts from same IP
-        for _ in range(10):
-            security_monitor.record_failed_attempt(f"user{_}", "192.168.1.100")
-        
-        assert security_monitor.is_ip_suspicious("192.168.1.100") is True
-        assert security_monitor.is_ip_suspicious("192.168.1.200") is False
-    
-    def test_get_security_stats(self, security_monitor):
-        """Test security statistics."""
-        # Record various security events
-        security_monitor.record_security_event("failed_login", "user1", "192.168.1.100")
-        security_monitor.record_security_event("successful_login", "user1", "192.168.1.100")
-        security_monitor.record_security_event("failed_login", "user2", "192.168.1.200")
-        
-        stats = security_monitor.get_security_stats()
-        
-        assert stats["total_events"] == 3
-        assert "event_types" in stats
-        assert stats["event_types"]["failed_login"] == 2
-        assert stats["event_types"]["successful_login"] == 1
-    
-    def test_cleanup_old_events(self, security_monitor):
-        """Test cleanup of old security events."""
-        old_time = time.time() - 7200  # 2 hours ago
-        recent_time = time.time()
-        
-        security_monitor.security_events = [
-            {"event_type": "failed_login", "timestamp": old_time},
-            {"event_type": "successful_login", "timestamp": recent_time}
-        ]
-        
-        security_monitor.cleanup_old_events(max_age_hours=1)
-        
-        assert len(security_monitor.security_events) == 1
-        assert security_monitor.security_events[0]["event_type"] == "successful_login"
+    def test_record_database_metric_delegates(self):
+        with patch.object(monitoring_dashboard.metrics, "record_database_query") as mock_record:
+            record_database_metric("select", 0.02, success=True)
+        mock_record.assert_called_once_with("select", 0.02, True)
+
+    def test_record_cache_metric_delegates(self):
+        with patch.object(monitoring_dashboard.metrics, "record_cache_operation") as mock_record:
+            record_cache_metric("get", "miss")
+        mock_record.assert_called_once_with("get", "miss")
+
+    def test_record_error_metric_delegates(self):
+        with patch.object(monitoring_dashboard.metrics, "record_error") as mock_record:
+            record_error_metric("timeout", severity="critical")
+        mock_record.assert_called_once_with("timeout", "critical")
+
+    def test_record_auth_metric_delegates(self):
+        with patch.object(monitoring_dashboard.metrics, "record_authentication_attempt") as mock_record:
+            record_auth_metric(True)
+        mock_record.assert_called_once_with(True)
+
+    def test_record_rate_limit_metric_delegates(self):
+        with patch.object(monitoring_dashboard.metrics, "record_rate_limit_hit") as mock_record:
+            record_rate_limit_metric("bot")
+        mock_record.assert_called_once_with("bot")

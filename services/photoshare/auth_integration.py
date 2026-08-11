@@ -205,7 +205,13 @@ class AuthenticatedUser:
     
     def __init__(self, user_data: Dict[str, Any], token_payload: Dict[str, Any]):
         self.uuid = user_data.get("uuid")
-        self.id = user_data.get("id") 
+        self.id = user_data.get("id")
+        # Compat alias: dozens of call sites across main.py (audit logs, admin
+        # endpoints, ownership checks) reference current_user.user_id, which was
+        # never actually defined on this class -- every one of those was a live
+        # AttributeError. Resources are owned by uuid throughout this codebase
+        # (Photo.user_uuid, Media.user_uuid), so alias to uuid rather than id.
+        self.user_id = self.uuid
         self.email = user_data.get("email")
         self.first_name = user_data.get("first_name")
         self.last_name = user_data.get("last_name")

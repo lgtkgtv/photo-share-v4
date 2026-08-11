@@ -34,6 +34,8 @@ venv.bak/
 .env
 .env.*
 !.env.example
+!.env.auth-service.example
+!.env.application.example
 !tests/.env.test
 
 # Testing

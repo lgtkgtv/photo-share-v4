@@ -27,7 +27,12 @@ class TestAuthServiceClient:
     
     @pytest.mark.asyncio
     async def test_verify_jwt_token_success(self, auth_client):
-        """Test successful JWT token verification."""
+        """Test successful JWT token verification.
+
+        AuthServiceClient verifies tokens with a shared HS256 secret
+        (JWT_SECRET_KEY), not RSA public keys fetched from the auth service --
+        there's no _get_public_key method or public-key cache on this class.
+        """
         test_payload = {
             "sub": "user-uuid-123",
             "user_id": 1,
@@ -35,27 +40,27 @@ class TestAuthServiceClient:
             "iat": 1234567890,
             "exp": 1234567890 + 1800
         }
-        
-        with patch.object(auth_client, '_get_public_key', return_value='test_public_key'):
-            with patch('jwt.decode') as mock_jwt_decode:
-                mock_jwt_decode.side_effect = [
-                    test_payload,  # First call for unverified decode
-                    test_payload   # Second call for verified decode
-                ]
-                
-                result = await auth_client.verify_jwt_token('test_token')
-                
-                assert result == test_payload
-                assert result["sub"] == "user-uuid-123"
-                assert result["user_id"] == 1
-    
+
+        with patch('jwt.decode', return_value=test_payload) as mock_jwt_decode:
+            result = await auth_client.verify_jwt_token('test_token')
+
+            assert result == test_payload
+            assert result["sub"] == "user-uuid-123"
+            assert result["user_id"] == 1
+            mock_jwt_decode.assert_called_once_with(
+                'test_token',
+                auth_client.jwt_secret_key,
+                algorithms=[auth_client.jwt_algorithm],
+                audience=auth_client.jwt_audience,
+                issuer=auth_client.jwt_issuer
+            )
+
     @pytest.mark.asyncio
     async def test_verify_jwt_token_invalid(self, auth_client):
         """Test JWT token verification with invalid token."""
-        with patch.object(auth_client, '_get_public_key', return_value='test_public_key'):
-            with patch('jwt.decode', side_effect=jwt.InvalidTokenError("Invalid token")):
-                with pytest.raises(Exception):  # Should raise HTTPException
-                    await auth_client.verify_jwt_token('invalid_token')
+        with patch('jwt.decode', side_effect=jwt.InvalidTokenError("Invalid token")):
+            with pytest.raises(Exception):  # Should raise HTTPException
+                await auth_client.verify_jwt_token('invalid_token')
     
     @pytest.mark.asyncio
     async def test_get_user_info_success(self, auth_client):
@@ -179,17 +184,19 @@ class TestAuthServiceClient:
             assert result["status"] == "unhealthy"
     
     def test_clear_cache(self, auth_client):
-        """Test cache clearing."""
+        """Test cache clearing.
+
+        No public-keys cache to clear here -- this client validates JWTs
+        against a shared secret, not fetched RSA public keys.
+        """
         # Add some mock data to caches
         auth_client._user_cache['user123'] = ({'data': 'test'}, 1234567890)
         auth_client._permissions_cache['user123'] = (['perm1'], 1234567890)
-        auth_client._public_keys_cache['key1'] = ('public_key', 1234567890)
-        
+
         auth_client.clear_cache()
-        
+
         assert len(auth_client._user_cache) == 0
         assert len(auth_client._permissions_cache) == 0
-        assert len(auth_client._public_keys_cache) == 0
 
 class TestAuthenticatedUser:
     """Test Authenticated User class."""
